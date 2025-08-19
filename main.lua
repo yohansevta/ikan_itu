@@ -28,47 +28,6 @@ local RodFix = {
     chargingConnection = nil
 }
 
--- Monitor charging phase untuk fix yang lebih aktif
-local function MonitorChargingPhase()
-    if RodFix.chargingConnection then
-        RodFix.chargingConnection:Disconnect()
-    end
-    
-    -- Monitor setiap frame selama charging untuk fix real-time
-    RodFix.chargingConnection = RunService.Heartbeat:Connect(function()
-        if not RodFix.enabled then return end
-        
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        local humanoid = character:FindFirstChild("Humanoid")
-        if not humanoid then return end
-        
-        -- Deteksi charging animation
-        local isCurrentlyCharging = false
-        for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
-            local animName = track.Name:lower()
-            if animName:find("charge") or animName:find("cast") or animName:find("rod") then
-                isCurrentlyCharging = true
-                break
-            end
-        end
-        
-        -- Jika dalam phase charging, lakukan fix lebih sering
-        if isCurrentlyCharging then
-            RodFix.isCharging = true
-            FixRodOrientation() -- Fix setiap frame selama charging
-        else
-            if RodFix.isCharging then
-                -- Setelah charging selesai, lakukan fix final
-                RodFix.isCharging = false
-                task.wait(0.1)
-                FixRodOrientation()
-            end
-        end
-    end)
-end
-
 local function FixRodOrientation()
     if not RodFix.enabled then return end
     
@@ -108,19 +67,56 @@ local function FixRodOrientation()
         -- Fix grip value yang ada
         local toolGrip = equippedTool:FindFirstChild("Grip")
         if toolGrip and toolGrip:IsA("CFrameValue") then
-            -- Grip value untuk rod menghadap depan
-            toolGrip.Value = CFrame.new(0, -1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            toolGrip.Value = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
             return
         end
         
-        -- Jika tidak ada grip value, buat yang baru
-        if not toolGrip then
-            toolGrip = Instance.new("CFrameValue")
-            toolGrip.Name = "Grip"
-            toolGrip.Value = CFrame.new(0, -1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            toolGrip.Parent = equippedTool
+        -- Method 3: Direct grip value update (fallback)
+        if equippedTool.Parent == character then
+            equippedTool.Grip = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
         end
     end
+end
+
+-- Monitor charging phase untuk fix yang lebih aktif
+local function MonitorChargingPhase()
+    if RodFix.chargingConnection then
+        RodFix.chargingConnection:Disconnect()
+    end
+    
+    -- Monitor setiap frame selama charging untuk fix real-time
+    RodFix.chargingConnection = RunService.Heartbeat:Connect(function()
+        if not RodFix.enabled then return end
+        
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local humanoid = character:FindFirstChild("Humanoid")
+        if not humanoid then return end
+        
+        -- Deteksi charging animation
+        local isCurrentlyCharging = false
+        for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+            local animName = track.Name:lower()
+            if animName:find("charge") or animName:find("cast") or animName:find("rod") then
+                isCurrentlyCharging = true
+                break
+            end
+        end
+        
+        -- Jika dalam phase charging, lakukan fix lebih sering
+        if isCurrentlyCharging then
+            RodFix.isCharging = true
+            FixRodOrientation() -- Fix setiap frame selama charging
+        else
+            if RodFix.isCharging then
+                -- Setelah charging selesai, lakukan fix final
+                RodFix.isCharging = false
+                task.wait(0.1)
+                FixRodOrientation()
+            end
+        end
+    end)
 end
 
 -- Simple notifier
