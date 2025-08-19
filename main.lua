@@ -807,6 +807,73 @@ local Dashboard = {
     optimalTimes = {}
 }
 
+-- Event Detection System
+local EventDetection = {
+    enabled = false,
+    activeEvents = {},
+    eventLocations = {},
+    lastScan = 0,
+    scanInterval = 5, -- seconds
+    
+    -- Server events yang bisa dideteksi
+    serverEvents = {
+        "Mutated", "Increased Luck", "Ghost Shark Hunt", "Sparkling Cove",
+        "Snow", "Worm Hunt", "Radiant", "Admin - Shocked", "Admin - Black Hole",
+        "Admin - Ghost Worm", "Admin - Meteor Rain", "Admin - Super Mutated",
+        "Shark Hunt"
+    },
+    
+    -- Event detection patterns
+    eventPatterns = {
+        ["Mutated"] = "Mutated|Mutation",
+        ["Increased Luck"] = "Luck.*Increased|Lucky.*Event",
+        ["Ghost Shark Hunt"] = "Ghost.*Shark",
+        ["Sparkling Cove"] = "Sparkling|Sparkle",
+        ["Snow"] = "Snow|Winter|Christmas",
+        ["Worm Hunt"] = "Worm.*Hunt|Giant.*Worm",
+        ["Radiant"] = "Radiant|Glow",
+        ["Admin - Shocked"] = "Shocked|Electric",
+        ["Admin - Black Hole"] = "Black.*Hole|Void",
+        ["Admin - Ghost Worm"] = "Ghost.*Worm",
+        ["Admin - Meteor Rain"] = "Meteor|Cosmic|Space",
+        ["Admin - Super Mutated"] = "Super.*Mutated|Extreme",
+        ["Shark Hunt"] = "Shark.*Hunt"
+    },
+    
+    -- Known event spawn locations
+    knownLocations = {
+        ["Mutated"] = {"Moosewood", "Ocean", "Snowcap Island"},
+        ["Ghost Shark Hunt"] = {"Deep Ocean", "Void"},
+        ["Sparkling Cove"] = {"Enchanted Altar", "Moosewood Pond"},
+        ["Snow"] = {"Snowcap Island", "Frozen Cave"},
+        ["Worm Hunt"] = {"Moosewood", "Deep Ocean"},
+        ["Shark Hunt"] = {"Ocean", "Deep Ocean", "Forsaken Shores"},
+        ["Radiant"] = {"All Locations"},
+        ["Admin - Shocked"] = {"Admin Area", "Special Zone"},
+        ["Admin - Black Hole"] = {"Void", "Deep Space"},
+        ["Admin - Ghost Worm"] = {"Haunted Waters", "Ghost Zone"},
+        ["Admin - Meteor Rain"] = {"Open Ocean", "Sky Areas"},
+        ["Admin - Super Mutated"] = {"All Locations"}
+    },
+    
+    -- Event colors for UI
+    eventColors = {
+        ["Mutated"] = Color3.fromRGB(255, 165, 0),
+        ["Increased Luck"] = Color3.fromRGB(255, 215, 0),
+        ["Ghost Shark Hunt"] = Color3.fromRGB(128, 0, 128),
+        ["Sparkling Cove"] = Color3.fromRGB(0, 255, 255),
+        ["Snow"] = Color3.fromRGB(173, 216, 230),
+        ["Worm Hunt"] = Color3.fromRGB(139, 69, 19),
+        ["Radiant"] = Color3.fromRGB(255, 255, 255),
+        ["Shark Hunt"] = Color3.fromRGB(255, 0, 0),
+        ["Admin - Shocked"] = Color3.fromRGB(255, 255, 0),
+        ["Admin - Black Hole"] = Color3.fromRGB(0, 0, 0),
+        ["Admin - Ghost Worm"] = Color3.fromRGB(128, 128, 128),
+        ["Admin - Meteor Rain"] = Color3.fromRGB(255, 165, 0),
+        ["Admin - Super Mutated"] = Color3.fromRGB(255, 0, 255)
+    }
+}
+
 -- Fish Rarity Categories (Updated from fishname.txt)
 local FishRarity = {
     MYTHIC = {
@@ -1340,6 +1407,124 @@ end
 local function StopWeatherSystem()
     Weather.enabled = false
     Notify("Weather", "🛑 Auto Weather System stopped")
+end
+
+-- Event Detection Functions
+local function ScanForActiveEvents()
+    local currentTime = tick()
+    if currentTime - EventDetection.lastScan < EventDetection.scanInterval then
+        return
+    end
+    EventDetection.lastScan = currentTime
+    
+    -- Clear old events
+    EventDetection.activeEvents = {}
+    
+    -- Scan workspace for event indicators
+    for _, eventName in ipairs(EventDetection.serverEvents) do
+        local pattern = EventDetection.eventPatterns[eventName]
+        if pattern then
+            -- Check for event indicators in workspace
+            local found = false
+            
+            -- Check GUI elements for event notifications
+            for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
+                if gui:IsA("ScreenGui") then
+                    for _, obj in ipairs(gui:GetDescendants()) do
+                        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                            local text = obj.Text:lower()
+                            if text:match(pattern:lower()) then
+                                found = true
+                                break
+                            end
+                        end
+                    end
+                end
+                if found then break end
+            end
+            
+            -- Check workspace for event objects
+            if not found then
+                for _, obj in ipairs(workspace:GetDescendants()) do
+                    if obj.Name:match(pattern) then
+                        found = true
+                        
+                        -- Try to get location from object position
+                        if obj:IsA("BasePart") or obj:IsA("Model") then
+                            local position = obj:IsA("Model") and obj:GetModelCFrame().Position or obj.Position
+                            EventDetection.eventLocations[eventName] = position
+                        end
+                        break
+                    end
+                end
+            end
+            
+            if found then
+                table.insert(EventDetection.activeEvents, {
+                    name = eventName,
+                    detectedAt = currentTime,
+                    locations = EventDetection.knownLocations[eventName] or {"Unknown"}
+                })
+            end
+        end
+    end
+end
+
+local function GetActiveEvents()
+    if EventDetection.enabled then
+        ScanForActiveEvents()
+    end
+    return EventDetection.activeEvents
+end
+
+local function TeleportToEvent(eventName)
+    local locations = EventDetection.knownLocations[eventName]
+    if not locations or #locations == 0 then
+        Notify("Event", "❌ No known locations for " .. eventName)
+        return
+    end
+    
+    -- Use the first known location
+    local targetLocation = locations[1]
+    
+    -- Define location coordinates (these would need to be updated with actual game coordinates)
+    local locationCoords = {
+        ["Moosewood"] = CFrame.new(-1480, -799, -2843),
+        ["Ocean"] = CFrame.new(0, -800, 0),
+        ["Deep Ocean"] = CFrame.new(0, -900, 3000),
+        ["Snowcap Island"] = CFrame.new(2648, 132, 2522),
+        ["Enchanted Altar"] = CFrame.new(1311, -799, -85),
+        ["Frozen Cave"] = CFrame.new(2648, -40, 2522),
+        ["Forsaken Shores"] = CFrame.new(-2800, 132, 1800),
+        ["Void"] = CFrame.new(0, -1500, 0),
+        ["Moosewood Pond"] = CFrame.new(-1480, -799, -2843)
+    }
+    
+    local targetCFrame = locationCoords[targetLocation]
+    if targetCFrame and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = targetCFrame
+        Notify("Event", "🚀 Teleported to " .. targetLocation .. " for " .. eventName)
+    else
+        Notify("Event", "❌ Unknown location: " .. targetLocation)
+    end
+end
+
+local function StartEventDetection()
+    EventDetection.enabled = true
+    Notify("Event", "🔍 Event Detection started")
+    
+    spawn(function()
+        while EventDetection.enabled do
+            ScanForActiveEvents()
+            wait(EventDetection.scanInterval)
+        end
+    end)
+end
+
+local function StopEventDetection()
+    EventDetection.enabled = false
+    EventDetection.activeEvents = {}
+    Notify("Event", "🛑 Event Detection stopped")
 end
 
 local function PurchaseAllWeatherEvents()
@@ -2338,6 +2523,21 @@ local function BuildUI()
     dashboardTabCorner.CornerRadius = UDim.new(0, 6)
     local dashboardTabPadding = Instance.new("UIPadding", dashboardTabBtn)
     dashboardTabPadding.PaddingLeft = UDim.new(0, 10)
+
+    -- Event Detection Tab
+    local eventTabBtn = Instance.new("TextButton", sidebar)
+    eventTabBtn.Size = UDim2.new(1, -10, 0, 40)
+    eventTabBtn.Position = UDim2.new(0, 5, 0, 260)
+    eventTabBtn.Text = "🎯 Event Tracker"
+    eventTabBtn.Font = Enum.Font.GothamSemibold
+    eventTabBtn.TextSize = 14
+    eventTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+    eventTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+    eventTabBtn.TextXAlignment = Enum.TextXAlignment.Left
+    local eventTabCorner = Instance.new("UICorner", eventTabBtn)
+    eventTabCorner.CornerRadius = UDim.new(0, 6)
+    local eventTabPadding = Instance.new("UIPadding", eventTabBtn)
+    eventTabPadding.PaddingLeft = UDim.new(0, 10)
 
     -- Content area on the right
     local contentContainer = Instance.new("Frame", panel)
@@ -4293,8 +4493,233 @@ local function BuildUI()
         end)
     end)
 
+    -- Event Detection Tab Content
+    local eventFrame = Instance.new("Frame", contentContainer)
+    eventFrame.Size = UDim2.new(1, 0, 1, -10)
+    eventFrame.Position = UDim2.new(0, 0, 0, 0)
+    eventFrame.BackgroundTransparency = 1
+    eventFrame.Visible = false
+
+    local eventTitle = Instance.new("TextLabel", eventFrame)
+    eventTitle.Size = UDim2.new(1, 0, 0, 24)
+    eventTitle.Text = "🎯 Server Event Detection & Tracker"
+    eventTitle.Font = Enum.Font.GothamBold
+    eventTitle.TextSize = 16
+    eventTitle.TextColor3 = Color3.fromRGB(235,235,235)
+    eventTitle.BackgroundTransparency = 1
+    eventTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Event Control Panel
+    local eventControlPanel = Instance.new("Frame", eventFrame)
+    eventControlPanel.Size = UDim2.new(1, 0, 0, 60)
+    eventControlPanel.Position = UDim2.new(0, 0, 0, 30)
+    eventControlPanel.BackgroundColor3 = Color3.fromRGB(35,35,42)
+    eventControlPanel.BorderSizePixel = 0
+    local eventControlCorner = Instance.new("UICorner", eventControlPanel)
+    eventControlCorner.CornerRadius = UDim.new(0, 8)
+
+    -- Event Detection Toggle
+    local eventDetectionBtn = Instance.new("TextButton", eventControlPanel)
+    eventDetectionBtn.Size = UDim2.new(0, 120, 0, 35)
+    eventDetectionBtn.Position = UDim2.new(0, 15, 0, 12)
+    eventDetectionBtn.Text = "🔍 Start Detection"
+    eventDetectionBtn.Font = Enum.Font.GothamSemibold
+    eventDetectionBtn.TextSize = 12
+    eventDetectionBtn.BackgroundColor3 = Color3.fromRGB(70,130,255)
+    eventDetectionBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    eventDetectionBtn.BorderSizePixel = 0
+    local eventDetectionCorner = Instance.new("UICorner", eventDetectionBtn)
+    eventDetectionCorner.CornerRadius = UDim.new(0, 6)
+
+    -- Auto Teleport Toggle
+    local autoTeleportToggle = Instance.new("TextButton", eventControlPanel)
+    autoTeleportToggle.Size = UDim2.new(0, 100, 0, 35)
+    autoTeleportToggle.Position = UDim2.new(0, 145, 0, 12)
+    autoTeleportToggle.Text = "📍 Auto TP: OFF"
+    autoTeleportToggle.Font = Enum.Font.GothamSemibold
+    autoTeleportToggle.TextSize = 11
+    autoTeleportToggle.BackgroundColor3 = Color3.fromRGB(200,80,80)
+    autoTeleportToggle.TextColor3 = Color3.fromRGB(255,255,255)
+    autoTeleportToggle.BorderSizePixel = 0
+    local autoTeleportCorner = Instance.new("UICorner", autoTeleportToggle)
+    autoTeleportCorner.CornerRadius = UDim.new(0, 6)
+
+    -- Scan Interval
+    local scanIntervalLabel = Instance.new("TextLabel", eventControlPanel)
+    scanIntervalLabel.Size = UDim2.new(0, 80, 0, 20)
+    scanIntervalLabel.Position = UDim2.new(0, 265, 0, 8)
+    scanIntervalLabel.Text = "Scan: 5s"
+    scanIntervalLabel.Font = Enum.Font.Gotham
+    scanIntervalLabel.TextSize = 11
+    scanIntervalLabel.TextColor3 = Color3.fromRGB(200,200,200)
+    scanIntervalLabel.BackgroundTransparency = 1
+    scanIntervalLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Active Events List
+    local activeEventsLabel = Instance.new("TextLabel", eventFrame)
+    activeEventsLabel.Size = UDim2.new(1, 0, 0, 20)
+    activeEventsLabel.Position = UDim2.new(0, 0, 0, 100)
+    activeEventsLabel.Text = "Active Server Events:"
+    activeEventsLabel.Font = Enum.Font.GothamSemibold
+    activeEventsLabel.TextSize = 14
+    activeEventsLabel.TextColor3 = Color3.fromRGB(235,235,235)
+    activeEventsLabel.BackgroundTransparency = 1
+    activeEventsLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Events Scroll Frame
+    local eventScrollFrame = Instance.new("ScrollingFrame", eventFrame)
+    eventScrollFrame.Size = UDim2.new(1, 0, 1, -130)
+    eventScrollFrame.Position = UDim2.new(0, 0, 0, 125)
+    eventScrollFrame.BackgroundColor3 = Color3.fromRGB(35,35,42)
+    eventScrollFrame.BorderSizePixel = 0
+    eventScrollFrame.ScrollBarThickness = 6
+    eventScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100,100,100)
+    local eventScrollCorner = Instance.new("UICorner", eventScrollFrame)
+    eventScrollCorner.CornerRadius = UDim.new(0, 8)
+
+    local eventListLayout = Instance.new("UIListLayout", eventScrollFrame)
+    eventListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    eventListLayout.Padding = UDim.new(0, 5)
+
+    -- Function to update event list
+    local function UpdateEventList()
+        -- Clear existing event items
+        for _, child in ipairs(eventScrollFrame:GetChildren()) do
+            if child:IsA("Frame") and child.Name == "EventItem" then
+                child:Destroy()
+            end
+        end
+        
+        local activeEvents = GetActiveEvents()
+        
+        if #activeEvents == 0 then
+            local noEventsLabel = Instance.new("TextLabel", eventScrollFrame)
+            noEventsLabel.Name = "EventItem"
+            noEventsLabel.Size = UDim2.new(1, -10, 0, 40)
+            noEventsLabel.Position = UDim2.new(0, 5, 0, 0)
+            noEventsLabel.Text = "🔍 No active events detected"
+            noEventsLabel.Font = Enum.Font.Gotham
+            noEventsLabel.TextSize = 12
+            noEventsLabel.TextColor3 = Color3.fromRGB(150,150,150)
+            noEventsLabel.BackgroundTransparency = 1
+            noEventsLabel.TextXAlignment = Enum.TextXAlignment.Center
+        else
+            for i, event in ipairs(activeEvents) do
+                local eventItem = Instance.new("Frame", eventScrollFrame)
+                eventItem.Name = "EventItem"
+                eventItem.Size = UDim2.new(1, -10, 0, 80)
+                eventItem.Position = UDim2.new(0, 5, 0, (i-1) * 85)
+                eventItem.BackgroundColor3 = Color3.fromRGB(45,45,52)
+                eventItem.BorderSizePixel = 0
+                local eventItemCorner = Instance.new("UICorner", eventItem)
+                eventItemCorner.CornerRadius = UDim.new(0, 6)
+                
+                -- Event indicator dot
+                local eventDot = Instance.new("Frame", eventItem)
+                eventDot.Size = UDim2.new(0, 8, 0, 8)
+                eventDot.Position = UDim2.new(0, 10, 0, 15)
+                eventDot.BackgroundColor3 = EventDetection.eventColors[event.name] or Color3.fromRGB(255,255,255)
+                eventDot.BorderSizePixel = 0
+                local eventDotCorner = Instance.new("UICorner", eventDot)
+                eventDotCorner.CornerRadius = UDim.new(0.5, 0)
+                
+                -- Event name
+                local eventNameLabel = Instance.new("TextLabel", eventItem)
+                eventNameLabel.Size = UDim2.new(1, -80, 0, 20)
+                eventNameLabel.Position = UDim2.new(0, 25, 0, 8)
+                eventNameLabel.Text = "🎯 " .. event.name
+                eventNameLabel.Font = Enum.Font.GothamBold
+                eventNameLabel.TextSize = 13
+                eventNameLabel.TextColor3 = Color3.fromRGB(235,235,235)
+                eventNameLabel.BackgroundTransparency = 1
+                eventNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                
+                -- Event locations
+                local locationsText = table.concat(event.locations, ", ")
+                local eventLocationLabel = Instance.new("TextLabel", eventItem)
+                eventLocationLabel.Size = UDim2.new(1, -80, 0, 15)
+                eventLocationLabel.Position = UDim2.new(0, 25, 0, 28)
+                eventLocationLabel.Text = "📍 " .. locationsText
+                eventLocationLabel.Font = Enum.Font.Gotham
+                eventLocationLabel.TextSize = 11
+                eventLocationLabel.TextColor3 = Color3.fromRGB(180,180,180)
+                eventLocationLabel.BackgroundTransparency = 1
+                eventLocationLabel.TextXAlignment = Enum.TextXAlignment.Left
+                
+                -- Teleport button
+                local teleportBtn = Instance.new("TextButton", eventItem)
+                teleportBtn.Size = UDim2.new(0, 70, 0, 25)
+                teleportBtn.Position = UDim2.new(1, -80, 0, 48)
+                teleportBtn.Text = "🚀 Teleport"
+                teleportBtn.Font = Enum.Font.GothamSemibold
+                teleportBtn.TextSize = 10
+                teleportBtn.BackgroundColor3 = Color3.fromRGB(70,130,255)
+                teleportBtn.TextColor3 = Color3.fromRGB(255,255,255)
+                teleportBtn.BorderSizePixel = 0
+                local teleportBtnCorner = Instance.new("UICorner", teleportBtn)
+                teleportBtnCorner.CornerRadius = UDim.new(0, 4)
+                
+                -- Teleport button click
+                teleportBtn.MouseButton1Click:Connect(function()
+                    TeleportToEvent(event.name)
+                end)
+                
+                -- Time detected
+                local timeDetected = math.floor(tick() - event.detectedAt)
+                local timeLabel = Instance.new("TextLabel", eventItem)
+                timeLabel.Size = UDim2.new(0, 100, 0, 12)
+                timeLabel.Position = UDim2.new(0, 25, 0, 48)
+                timeLabel.Text = "⏱️ " .. timeDetected .. "s ago"
+                timeLabel.Font = Enum.Font.Gotham
+                timeLabel.TextSize = 9
+                timeLabel.TextColor3 = Color3.fromRGB(150,150,150)
+                timeLabel.BackgroundTransparency = 1
+                timeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            end
+        end
+        
+        -- Update scroll canvas size
+        eventScrollFrame.CanvasSize = UDim2.new(0, 0, 0, #activeEvents * 85)
+    end
+
+    -- Event Detection Button Click
+    eventDetectionBtn.MouseButton1Click:Connect(function()
+        if EventDetection.enabled then
+            StopEventDetection()
+            eventDetectionBtn.Text = "🔍 Start Detection"
+            eventDetectionBtn.BackgroundColor3 = Color3.fromRGB(70,130,255)
+        else
+            StartEventDetection()
+            eventDetectionBtn.Text = "🛑 Stop Detection"
+            eventDetectionBtn.BackgroundColor3 = Color3.fromRGB(200,80,80)
+        end
+    end)
+
+    -- Auto Teleport Toggle Click
+    local autoTeleportEnabled = false
+    autoTeleportToggle.MouseButton1Click:Connect(function()
+        autoTeleportEnabled = not autoTeleportEnabled
+        if autoTeleportEnabled then
+            autoTeleportToggle.Text = "📍 Auto TP: ON"
+            autoTeleportToggle.BackgroundColor3 = Color3.fromRGB(80,200,80)
+        else
+            autoTeleportToggle.Text = "📍 Auto TP: OFF"
+            autoTeleportToggle.BackgroundColor3 = Color3.fromRGB(200,80,80)
+        end
+    end)
+
+    -- Update event list periodically
+    spawn(function()
+        while true do
+            if eventFrame.Visible and EventDetection.enabled then
+                UpdateEventList()
+            end
+            wait(2)
+        end
+    end)
+
     -- Robust tab switching: collect tabs and provide SwitchTo
-    local Tabs = { FishingAI = fishingAIFrame, Teleport = teleportFrame, Player = playerFrame, Feature = featureFrame, Dashboard = dashboardFrame }
+    local Tabs = { FishingAI = fishingAIFrame, Teleport = teleportFrame, Player = playerFrame, Feature = featureFrame, Dashboard = dashboardFrame, Event = eventFrame }
     local function SwitchTo(name)
         for k, v in pairs(Tabs) do
             v.Visible = (k == name)
@@ -4312,6 +4737,8 @@ local function BuildUI()
             featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            eventTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            eventTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Smart AI Fishing Configuration"
         elseif name == "Teleport" then
             teleportTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
@@ -4324,6 +4751,8 @@ local function BuildUI()
             featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            eventTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            eventTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Island Locations"
         elseif name == "Player" then
             playerTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
@@ -4336,6 +4765,8 @@ local function BuildUI()
             featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            eventTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            eventTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Player Teleport"
             updatePlayerList(searchBox.Text) -- Refresh when switching to player tab
         elseif name == "Feature" then
@@ -4349,8 +4780,10 @@ local function BuildUI()
             playerTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            eventTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            eventTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Character Features"
-        else -- Dashboard
+        elseif name == "Dashboard" then
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(235,235,235)
             fishingAITabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
@@ -4361,7 +4794,23 @@ local function BuildUI()
             playerTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             featureTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            eventTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            eventTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Fishing Analytics"
+        elseif name == "Event" then
+            eventTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
+            eventTabBtn.TextColor3 = Color3.fromRGB(235,235,235)
+            fishingAITabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            fishingAITabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            teleportTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            teleportTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            playerTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            playerTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            featureTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+            dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
+            contentTitle.Text = "Server Event Detection & Tracking"
         end
     end
 
@@ -4370,6 +4819,7 @@ local function BuildUI()
     playerTabBtn.MouseButton1Click:Connect(function() SwitchTo("Player") end)
     featureTabBtn.MouseButton1Click:Connect(function() SwitchTo("Feature") end)
     dashboardTabBtn.MouseButton1Click:Connect(function() SwitchTo("Dashboard") end)
+    eventTabBtn.MouseButton1Click:Connect(function() SwitchTo("Event") end)
 
     -- Start with FishingAI visible (replaces Main)
     SwitchTo("FishingAI")
