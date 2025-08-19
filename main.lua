@@ -749,10 +749,45 @@ local Weather = {
     enabled = false,
     autoPurchase = false,
     weatherTypes = {
-        "All", "Rain", "Storm", "Sunny", "Cloudy", "Fog", "Wind"
+        "All", "Day", "Night", "Cloudy", "Mutated", "Wind", "Storm", 
+        "Increased Luck", "Shark Hunt", "Ghost Shark Hunt", 
+        "Sparkling Cove", "Snow", "Worm Hunt", "Radiant",
+        "Admin - Shocked", "Admin - Black Hole", "Admin - Ghost Worm",
+        "Admin - Meteor Rain", "Admin - Super Mutated"
     },
     selectedWeather = "All",
     lastPurchaseTime = 0,
+    
+    -- Weather benefits mapping
+    benefits = {
+        ["All"] = "Random weather selection",
+        ["Day"] = "Normal fishing conditions",
+        ["Night"] = "Better rare fish spawn rates",
+        ["Cloudy"] = "Increased mutation chance", 
+        ["Mutated"] = "High mutation rates for all fish",
+        ["Wind"] = "Faster fishing animation",
+        ["Storm"] = "Increased legendary fish rates",
+        ["Increased Luck"] = "Higher chance for rare catches",
+        ["Shark Hunt"] = "Shark spawns increased",
+        ["Ghost Shark Hunt"] = "Ghost shark exclusive spawns",
+        ["Sparkling Cove"] = "Enchanted fish spawns",
+        ["Snow"] = "Winter event fish available",
+        ["Worm Hunt"] = "Worm fish spawns increased", 
+        ["Radiant"] = "All fish have glow effect",
+        ["Admin - Shocked"] = "Electric themed fish",
+        ["Admin - Black Hole"] = "Dark matter fish spawns",
+        ["Admin - Ghost Worm"] = "Ghost worm exclusive spawns",
+        ["Admin - Meteor Rain"] = "Cosmic themed fish",
+        ["Admin - Super Mutated"] = "Extreme mutation rates"
+    },
+    
+    -- Priority order for auto weather (best to worst)
+    priority = {
+        "Admin - Super Mutated", "Mutated", "Admin - Meteor Rain", 
+        "Increased Luck", "Storm", "Ghost Shark Hunt", "Shark Hunt",
+        "Sparkling Cove", "Radiant", "Snow", "Worm Hunt", "Night",
+        "Wind", "Cloudy", "Day"
+    },
     cooldownTime = 5
 }
 
@@ -1256,6 +1291,55 @@ local function PurchaseWeatherEvent(weatherType)
         Notify("Weather", "❌ Failed to purchase weather: " .. tostring(res))
         return false
     end
+end
+
+local function GetBestWeatherForFishing()
+    -- Return the best weather based on current goals
+    if Config.fishingMode == "FAST" then
+        return "Wind" -- Fast fishing
+    elseif Config.fishingMode == "RARE" then
+        return "Admin - Super Mutated" -- Best for rare fish
+    else
+        return "Increased Luck" -- Balanced option
+    end
+end
+
+local function GetWeatherBenefit(weatherType)
+    return Weather.benefits[weatherType] or "Unknown weather effect"
+end
+
+local function AutoSelectBestWeather()
+    if not Weather.autoPurchase then return end
+    
+    -- Try to purchase the best weather based on priority
+    for _, weatherType in ipairs(Weather.priority) do
+        if PurchaseWeatherEvent(weatherType) then
+            Weather.selectedWeather = weatherType
+            break
+        end
+        wait(0.1) -- Small delay between attempts
+    end
+end
+
+local function StartWeatherSystem()
+    if Weather.enabled then return end
+    
+    Weather.enabled = true
+    Notify("Weather", "🌦️ Auto Weather System started")
+    
+    spawn(function()
+        while Weather.enabled do
+            if Weather.autoPurchase then
+                AutoSelectBestWeather()
+            end
+            wait(30) -- Check every 30 seconds
+        end
+    end)
+end
+
+local function StopWeatherSystem()
+    Weather.enabled = false
+    Notify("Weather", "🛑 Auto Weather System stopped")
 end
 
 local function PurchaseAllWeatherEvents()
