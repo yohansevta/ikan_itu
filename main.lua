@@ -752,27 +752,51 @@ local Weather = {
     cooldownTime = 5
 }
 
--- Event Detector System (Load from Raw GitHub)
+-- Event Detector System (Load from Raw GitHub) - Safe Loading
 local EventDetector = nil
-local function LoadEventDetector()
-    local success, result = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/yohansevta/ikan_itu/main/event_detector.lua", true))()
-    end)
-    
-    if success then
-        EventDetector = result
-        Notify("Event Detector", "✅ Event Detector module loaded successfully")
-        return true
-    else
-        warn("Failed to load Event Detector:", result)
-        Notify("Event Detector", "❌ Failed to load Event Detector module")
-        return false
+
+-- Create safe dummy EventDetector first to prevent nil errors
+EventDetector = {
+    Events = {},
+    StartScanning = function() 
+        Notify("Event Detector", "EventDetector not loaded yet")
+    end,
+    StopScanning = function() 
+        Notify("Event Detector", "EventDetector not loaded yet")
+    end,
+    ToggleAutoTeleport = function() 
+        Notify("Event Detector", "EventDetector not loaded yet")
+        return false 
+    end,
+    TeleportToLocation = function() 
+        Notify("Event Detector", "EventDetector not loaded yet")
     end
+}
+
+local function LoadEventDetector()
+    spawn(function()
+        local success, result = pcall(function()
+            local moduleCode = game:HttpGet("https://raw.githubusercontent.com/yohansevta/ikan_itu/main/event_detector.lua", true)
+            if moduleCode and moduleCode ~= "" then
+                return loadstring(moduleCode)()
+            else
+                error("Empty or invalid module code")
+            end
+        end)
+        
+        if success and result then
+            EventDetector = result
+            Notify("Event Detector", "✅ Event Detector module loaded successfully")
+        else
+            warn("Failed to load Event Detector:", result)
+            Notify("Event Detector", "⚠️ EventDetector unavailable - using basic mode")
+        end
+    end)
 end
 
--- Initialize Event Detector
+-- Initialize Event Detector safely in background
 spawn(function()
-    wait(2) -- Wait for game to fully load
+    wait(3) -- Wait for game to fully load
     LoadEventDetector()
 end)
 
@@ -4525,13 +4549,23 @@ local function BuildUI()
         end
     end)
 
-    -- Initialize all events UI when EventDetector is loaded
+    -- Initialize all events UI when ready (safe version)
     spawn(function()
-        while not EventDetector do
-            wait(1)
+        wait(5) -- Wait longer for EventDetector to load
+        if EventDetector and EventDetector.Events and type(EventDetector.Events) == "table" then
+            CreateAllEventsUI()
+        else
+            -- Create placeholder UI
+            local noEventsLabel = Instance.new("TextLabel", allEventsList)
+            noEventsLabel.Size = UDim2.new(1, -10, 0, 60)
+            noEventsLabel.Position = UDim2.new(0, 5, 0, 10)
+            noEventsLabel.BackgroundTransparency = 1
+            noEventsLabel.Text = "EventDetector loading...\nCheck back in a moment"
+            noEventsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+            noEventsLabel.TextSize = 14
+            noEventsLabel.Font = Enum.Font.Gotham
+            noEventsLabel.TextXAlignment = Enum.TextXAlignment.Center
         end
-        wait(1) -- Wait a bit more for full initialization
-        CreateAllEventsUI()
     end)
 
     -- Robust tab switching: collect tabs and provide SwitchTo
