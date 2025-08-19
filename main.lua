@@ -749,11 +749,7 @@ local Weather = {
     enabled = false,
     autoPurchase = false,
     weatherTypes = {
-        "All", "Day", "Night", "Cloudy", "Mutated", "Wind", "Storm", 
-        "Increased Luck", "Shark Hunt", "Ghost Shark Hunt", 
-        "Sparkling Cove", "Snow", "Worm Hunt", "Radiant",
-        "Admin - Shocked", "Admin - Black Hole", "Admin - Ghost Worm",
-        "Admin - Meteor Rain", "Admin - Super Mutated"
+        "All", "Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"
     },
     selectedWeather = "All",
     lastPurchaseTime = 0,
@@ -761,32 +757,17 @@ local Weather = {
     -- Weather benefits mapping
     benefits = {
         ["All"] = "Random weather selection",
-        ["Day"] = "Normal fishing conditions",
-        ["Night"] = "Better rare fish spawn rates",
-        ["Cloudy"] = "Increased mutation chance", 
-        ["Mutated"] = "High mutation rates for all fish",
-        ["Wind"] = "Faster fishing animation",
-        ["Storm"] = "Increased legendary fish rates",
-        ["Increased Luck"] = "Higher chance for rare catches",
-        ["Shark Hunt"] = "Shark spawns increased",
-        ["Ghost Shark Hunt"] = "Ghost shark exclusive spawns",
-        ["Sparkling Cove"] = "Enchanted fish spawns",
-        ["Snow"] = "Winter event fish available",
-        ["Worm Hunt"] = "Worm fish spawns increased", 
-        ["Radiant"] = "All fish have glow effect",
-        ["Admin - Shocked"] = "Electric themed fish",
-        ["Admin - Black Hole"] = "Dark matter fish spawns",
-        ["Admin - Ghost Worm"] = "Ghost worm exclusive spawns",
-        ["Admin - Meteor Rain"] = "Cosmic themed fish",
-        ["Admin - Super Mutated"] = "Extreme mutation rates"
+        ["Wind"] = "Faster fishing animation & cast speed",
+        ["Cloudy"] = "Increased mutation chance for fish", 
+        ["Snow"] = "Winter event fish available & snow effects",
+        ["Storm"] = "Increased legendary fish spawn rates",
+        ["Radiant"] = "All fish have glow effect & better visibility",
+        ["Shark Hunt"] = "Shark spawns increased dramatically"
     },
     
     -- Priority order for auto weather (best to worst)
     priority = {
-        "Admin - Super Mutated", "Mutated", "Admin - Meteor Rain", 
-        "Increased Luck", "Storm", "Ghost Shark Hunt", "Shark Hunt",
-        "Sparkling Cove", "Radiant", "Snow", "Worm Hunt", "Night",
-        "Wind", "Cloudy", "Day"
+        "Storm", "Shark Hunt", "Radiant", "Snow", "Wind", "Cloudy"
     },
     cooldownTime = 5
 }
@@ -1365,9 +1346,9 @@ local function GetBestWeatherForFishing()
     if Config.fishingMode == "FAST" then
         return "Wind" -- Fast fishing
     elseif Config.fishingMode == "RARE" then
-        return "Admin - Super Mutated" -- Best for rare fish
+        return "Storm" -- Best for rare fish
     else
-        return "Increased Luck" -- Balanced option
+        return "Radiant" -- Balanced option with glow effect
     end
 end
 
@@ -1530,7 +1511,7 @@ end
 local function PurchaseAllWeatherEvents()
     if not Weather.enabled or not purchaseWeatherEventRemote then return false end
     
-    local allWeatherTypes = {"Rain", "Storm", "Sunny", "Cloudy", "Fog", "Wind"}
+    local allWeatherTypes = {"Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"}
     local successCount = 0
     local totalCount = #allWeatherTypes
     
@@ -4095,7 +4076,7 @@ local function BuildUI()
         buyAllBtn.BackgroundColor3 = Color3.fromRGB(128,128,128)
         
         task.spawn(function()
-            local allWeatherTypes = {"Rain", "Storm", "Sunny", "Cloudy", "Fog", "Wind"}
+            local allWeatherTypes = {"Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"}
             local successCount = 0
             local totalCount = #allWeatherTypes
             

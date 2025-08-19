@@ -33,14 +33,16 @@
   📜 ModuleScript Found: ReplicatedStorage.Baits.Aether Bait
   📜 ModuleScript Found: ReplicatedStorage.Areas
   📜 ModuleScript Found: ReplicatedStorage.Tiers
+
   📜 ModuleScript Found: ReplicatedStorage.Events
   📜 ModuleScript Found: ReplicatedStorage.Events.Day
   📜 ModuleScript Found: ReplicatedStorage.Events.Cloudy
-  📜 ModuleScript Found: ReplicatedStorage.Events.Mutated
-  📜 ModuleScript Found: ReplicatedStorage.Events.Wind
+   📜 ModuleScript Found: ReplicatedStorage.Events.Wind
   📜 ModuleScript Found: ReplicatedStorage.Events.Storm
   📜 ModuleScript Found: ReplicatedStorage.Events.Night
+
   📜 ModuleScript Found: ReplicatedStorage.Events.Increased Luck
+ 📜 ModuleScript Found: ReplicatedStorage.Events.Mutated
   📜 ModuleScript Found: ReplicatedStorage.Events.Shark Hunt
   📜 ModuleScript Found: ReplicatedStorage.Events.Ghost Shark Hunt
   📜 ModuleScript Found: ReplicatedStorage.Events.Sparkling Cove
@@ -52,6 +54,7 @@
   📜 ModuleScript Found: ReplicatedStorage.Events.Admin - Meteor Rain
   📜 ModuleScript Found: ReplicatedStorage.Events.Admin - Super Mutated
   📜 ModuleScript Found: ReplicatedStorage.Events.Radiant
+
   📜 ModuleScript Found: ReplicatedStorage.Enchants
   📜 ModuleScript Found: ReplicatedStorage.Enchants.XPerienced I
   📜 ModuleScript Found: ReplicatedStorage.Enchants.Stormhunter I
