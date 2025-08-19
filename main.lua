@@ -4618,6 +4618,10 @@ local function BuildUI()
             eventDetectorTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Fishing Analytics"
         elseif name == "EventDetector" then
+            if not EventDetector then
+                contentTitle.Text = "Event Detection - Loading..."
+                return
+            end
             eventDetectorTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
             eventDetectorTabBtn.TextColor3 = Color3.fromRGB(235,235,235)
             fishingAITabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
