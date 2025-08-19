@@ -28,56 +28,6 @@ local RodFix = {
     chargingConnection = nil
 }
 
-local function FixRodOrientation()
-    if not RodFix.enabled then return end
-    
-    local now = tick()
-    if now - RodFix.lastFixTime < 0.05 then return end -- Faster throttle for charging phase
-    RodFix.lastFixTime = now
-    
-    local character = LocalPlayer.Character
-    if not character then return end
-    
-    local equippedTool = character:FindFirstChildOfClass("Tool")
-    if not equippedTool then return end
-    
-    -- Pastikan ini fishing rod
-    local isRod = equippedTool.Name:lower():find("rod") or 
-                  equippedTool:FindFirstChild("Rod") or
-                  equippedTool:FindFirstChild("Handle")
-    if not isRod then return end
-    
-    -- Method 1: Fix Motor6D during charging phase (paling efektif)
-    local rightArm = character:FindFirstChild("Right Arm")
-    if rightArm then
-        local rightGrip = rightArm:FindFirstChild("RightGrip")
-        if rightGrip and rightGrip:IsA("Motor6D") then
-            -- Orientasi normal untuk rod menghadap depan SELAMA charging
-            -- C0 mengontrol posisi/orientasi di right arm
-            -- C1 mengontrol posisi/orientasi di handle
-            rightGrip.C0 = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            rightGrip.C1 = CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, 0)
-            return
-        end
-    end
-    
-    -- Method 2: Fix Tool Grip Value (untuk tools dengan custom grip)
-    local handle = equippedTool:FindFirstChild("Handle")
-    if handle then
-        -- Fix grip value yang ada
-        local toolGrip = equippedTool:FindFirstChild("Grip")
-        if toolGrip and toolGrip:IsA("CFrameValue") then
-            toolGrip.Value = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            return
-        end
-        
-        -- Method 3: Direct grip value update (fallback)
-        if equippedTool.Parent == character then
-            equippedTool.Grip = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-        end
-    end
-end
-
 -- Monitor charging phase untuk fix yang lebih aktif
 local function MonitorChargingPhase()
     if RodFix.chargingConnection then
@@ -117,6 +67,60 @@ local function MonitorChargingPhase()
             end
         end
     end)
+end
+
+local function FixRodOrientation()
+    if not RodFix.enabled then return end
+    
+    local now = tick()
+    if now - RodFix.lastFixTime < 0.05 then return end -- Faster throttle for charging phase
+    RodFix.lastFixTime = now
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local equippedTool = character:FindFirstChildOfClass("Tool")
+    if not equippedTool then return end
+    
+    -- Pastikan ini fishing rod
+    local isRod = equippedTool.Name:lower():find("rod") or 
+                  equippedTool:FindFirstChild("Rod") or
+                  equippedTool:FindFirstChild("Handle")
+    if not isRod then return end
+    
+    -- Method 1: Fix Motor6D during charging phase (paling efektif)
+    local rightArm = character:FindFirstChild("Right Arm")
+    if rightArm then
+        local rightGrip = rightArm:FindFirstChild("RightGrip")
+        if rightGrip and rightGrip:IsA("Motor6D") then
+            -- Orientasi normal untuk rod menghadap depan SELAMA charging
+            -- C0 mengontrol posisi/orientasi di right arm
+            -- C1 mengontrol posisi/orientasi di handle
+            rightGrip.C0 = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            rightGrip.C1 = CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, 0)
+            return
+        end
+    end
+    
+    -- Method 2: Fix Tool Grip Value (untuk tools dengan custom grip)
+    local handle = equippedTool:FindFirstChild("Handle")
+    if handle then
+        -- Fix grip value yang ada
+        local toolGrip = equippedTool:FindFirstChild("Grip")
+        if toolGrip and toolGrip:IsA("CFrameValue") then
+            -- Grip value untuk rod menghadap depan
+            toolGrip.Value = CFrame.new(0, -1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            return
+        end
+        
+        -- Jika tidak ada grip value, buat yang baru
+        if not toolGrip then
+            toolGrip = Instance.new("CFrameValue")
+            toolGrip.Name = "Grip"
+            toolGrip.Value = CFrame.new(0, -1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            toolGrip.Parent = equippedTool
+        end
+    end
 end
 
 -- Simple notifier
@@ -751,54 +755,6 @@ local Weather = {
     lastPurchaseTime = 0,
     cooldownTime = 5
 }
-
--- Event Detector System (Load from Raw GitHub) - Safe Loading
-local EventDetector = nil
-
--- Create safe dummy EventDetector first to prevent nil errors
-EventDetector = {
-    Events = {},
-    StartScanning = function() 
-        Notify("Event Detector", "EventDetector not loaded yet")
-    end,
-    StopScanning = function() 
-        Notify("Event Detector", "EventDetector not loaded yet")
-    end,
-    ToggleAutoTeleport = function() 
-        Notify("Event Detector", "EventDetector not loaded yet")
-        return false 
-    end,
-    TeleportToLocation = function() 
-        Notify("Event Detector", "EventDetector not loaded yet")
-    end
-}
-
-local function LoadEventDetector()
-    spawn(function()
-        local success, result = pcall(function()
-            local moduleCode = game:HttpGet("https://raw.githubusercontent.com/yohansevta/ikan_itu/main/event_detector.lua", true)
-            if moduleCode and moduleCode ~= "" then
-                return loadstring(moduleCode)()
-            else
-                error("Empty or invalid module code")
-            end
-        end)
-        
-        if success and result then
-            EventDetector = result
-            Notify("Event Detector", "✅ Event Detector module loaded successfully")
-        else
-            warn("Failed to load Event Detector:", result)
-            Notify("Event Detector", "⚠️ EventDetector unavailable - using basic mode")
-        end
-    end)
-end
-
--- Initialize Event Detector safely in background
-spawn(function()
-    wait(3) -- Wait for game to fully load
-    LoadEventDetector()
-end)
 
 -- Dashboard & Statistics System
 local Dashboard = {
@@ -2298,20 +2254,6 @@ local function BuildUI()
     dashboardTabCorner.CornerRadius = UDim.new(0, 6)
     local dashboardTabPadding = Instance.new("UIPadding", dashboardTabBtn)
     dashboardTabPadding.PaddingLeft = UDim.new(0, 10)
-
-    local eventDetectorTabBtn = Instance.new("TextButton", sidebar)
-    eventDetectorTabBtn.Size = UDim2.new(1, -10, 0, 40)
-    eventDetectorTabBtn.Position = UDim2.new(0, 5, 0, 255)
-    eventDetectorTabBtn.Text = "🎯 Event Detector"
-    eventDetectorTabBtn.Font = Enum.Font.GothamSemibold
-    eventDetectorTabBtn.TextSize = 14
-    eventDetectorTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-    eventDetectorTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-    eventDetectorTabBtn.TextXAlignment = Enum.TextXAlignment.Left
-    local eventDetectorTabCorner = Instance.new("UICorner", eventDetectorTabBtn)
-    eventDetectorTabCorner.CornerRadius = UDim.new(0, 6)
-    local eventDetectorTabPadding = Instance.new("UIPadding", eventDetectorTabBtn)
-    eventDetectorTabPadding.PaddingLeft = UDim.new(0, 10)
 
     -- Content area on the right
     local contentContainer = Instance.new("Frame", panel)
@@ -4267,309 +4209,8 @@ local function BuildUI()
         end)
     end)
 
-    -- EVENT DETECTOR FRAME
-    local eventDetectorFrame = Instance.new("Frame", contentContainer)
-    eventDetectorFrame.Size = UDim2.new(1, 0, 1, -10)
-    eventDetectorFrame.Position = UDim2.new(0, 0, 0, 0)
-    eventDetectorFrame.BackgroundTransparency = 1
-    eventDetectorFrame.Visible = false
-
-    local eventDetectorTitle = Instance.new("TextLabel", eventDetectorFrame)
-    eventDetectorTitle.Size = UDim2.new(1, 0, 0, 24)
-    eventDetectorTitle.Text = "🎯 Event Detector & Auto Teleport"
-    eventDetectorTitle.Font = Enum.Font.GothamBold
-    eventDetectorTitle.TextSize = 16
-    eventDetectorTitle.TextColor3 = Color3.fromRGB(235,235,235)
-    eventDetectorTitle.BackgroundTransparency = 1
-    eventDetectorTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-    -- Create scrollable frame for event detector
-    local eventDetectorScrollFrame = Instance.new("ScrollingFrame", eventDetectorFrame)
-    eventDetectorScrollFrame.Size = UDim2.new(1, -10, 1, -30)
-    eventDetectorScrollFrame.Position = UDim2.new(0, 5, 0, 30)
-    eventDetectorScrollFrame.BackgroundColor3 = Color3.fromRGB(30,30,36)
-    eventDetectorScrollFrame.BorderSizePixel = 0
-    eventDetectorScrollFrame.ScrollBarThickness = 6
-    eventDetectorScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(80,80,90)
-    eventDetectorScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 800)
-    local eventDetectorScrollCorner = Instance.new("UICorner", eventDetectorScrollFrame)
-    eventDetectorScrollCorner.CornerRadius = UDim.new(0, 8)
-
-    -- Event Detection Controls
-    local detectionControlsSection = Instance.new("Frame", eventDetectorScrollFrame)
-    detectionControlsSection.Size = UDim2.new(1, -20, 0, 120)
-    detectionControlsSection.Position = UDim2.new(0, 10, 0, 10)
-    detectionControlsSection.BackgroundColor3 = Color3.fromRGB(40,40,46)
-    local detectionControlsCorner = Instance.new("UICorner", detectionControlsSection)
-    detectionControlsCorner.CornerRadius = UDim.new(0, 8)
-
-    local detectionControlsTitle = Instance.new("TextLabel", detectionControlsSection)
-    detectionControlsTitle.Size = UDim2.new(1, -20, 0, 25)
-    detectionControlsTitle.Position = UDim2.new(0, 10, 0, 5)
-    detectionControlsTitle.Text = "🔍 Event Detection Controls"
-    detectionControlsTitle.Font = Enum.Font.GothamSemibold
-    detectionControlsTitle.TextSize = 14
-    detectionControlsTitle.TextColor3 = Color3.fromRGB(235,235,235)
-    detectionControlsTitle.BackgroundTransparency = 1
-    detectionControlsTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-    -- Start/Stop Detection Buttons
-    local startDetectionBtn = Instance.new("TextButton", detectionControlsSection)
-    startDetectionBtn.Size = UDim2.new(0.45, -5, 0, 35)
-    startDetectionBtn.Position = UDim2.new(0, 10, 0, 35)
-    startDetectionBtn.Text = "🟢 Start Detection"
-    startDetectionBtn.Font = Enum.Font.GothamSemibold
-    startDetectionBtn.TextSize = 12
-    startDetectionBtn.BackgroundColor3 = Color3.fromRGB(60,180,80)
-    startDetectionBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    local startDetectionCorner = Instance.new("UICorner", startDetectionBtn)
-    startDetectionCorner.CornerRadius = UDim.new(0, 6)
-
-    local stopDetectionBtn = Instance.new("TextButton", detectionControlsSection)
-    stopDetectionBtn.Size = UDim2.new(0.45, -5, 0, 35)
-    stopDetectionBtn.Position = UDim2.new(0.5, 5, 0, 35)
-    stopDetectionBtn.Text = "🔴 Stop Detection"
-    stopDetectionBtn.Font = Enum.Font.GothamSemibold
-    stopDetectionBtn.TextSize = 12
-    stopDetectionBtn.BackgroundColor3 = Color3.fromRGB(200,80,80)
-    stopDetectionBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    local stopDetectionCorner = Instance.new("UICorner", stopDetectionBtn)
-    stopDetectionCorner.CornerRadius = UDim.new(0, 6)
-
-    -- Auto Teleport Toggle
-    local autoTeleportToggle = Instance.new("TextButton", detectionControlsSection)
-    autoTeleportToggle.Size = UDim2.new(1, -20, 0, 35)
-    autoTeleportToggle.Position = UDim2.new(0, 10, 0, 80)
-    autoTeleportToggle.Text = "🚀 Auto Teleport: OFF"
-    autoTeleportToggle.Font = Enum.Font.GothamSemibold
-    autoTeleportToggle.TextSize = 12
-    autoTeleportToggle.BackgroundColor3 = Color3.fromRGB(60,60,66)
-    autoTeleportToggle.TextColor3 = Color3.fromRGB(200,200,200)
-    local autoTeleportCorner = Instance.new("UICorner", autoTeleportToggle)
-    autoTeleportCorner.CornerRadius = UDim.new(0, 6)
-
-    -- Active Events Section
-    local activeEventsSection = Instance.new("Frame", eventDetectorScrollFrame)
-    activeEventsSection.Size = UDim2.new(1, -20, 0, 200)
-    activeEventsSection.Position = UDim2.new(0, 10, 0, 140)
-    activeEventsSection.BackgroundColor3 = Color3.fromRGB(40,40,46)
-    local activeEventsCorner = Instance.new("UICorner", activeEventsSection)
-    activeEventsCorner.CornerRadius = UDim.new(0, 8)
-
-    local activeEventsTitle = Instance.new("TextLabel", activeEventsSection)
-    activeEventsTitle.Size = UDim2.new(1, -20, 0, 25)
-    activeEventsTitle.Position = UDim2.new(0, 10, 0, 5)
-    activeEventsTitle.Text = "🎉 Active Events"
-    activeEventsTitle.Font = Enum.Font.GothamSemibold
-    activeEventsTitle.TextSize = 14
-    activeEventsTitle.TextColor3 = Color3.fromRGB(235,235,235)
-    activeEventsTitle.BackgroundTransparency = 1
-    activeEventsTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-    local activeEventsList = Instance.new("ScrollingFrame", activeEventsSection)
-    activeEventsList.Size = UDim2.new(1, -20, 1, -35)
-    activeEventsList.Position = UDim2.new(0, 10, 0, 30)
-    activeEventsList.BackgroundColor3 = Color3.fromRGB(35,35,41)
-    activeEventsList.BorderSizePixel = 0
-    activeEventsList.ScrollBarThickness = 4
-    activeEventsList.ScrollBarImageColor3 = Color3.fromRGB(80,80,90)
-    activeEventsList.CanvasSize = UDim2.new(0, 0, 0, 0)
-    local activeEventsListCorner = Instance.new("UICorner", activeEventsList)
-    activeEventsListCorner.CornerRadius = UDim.new(0, 6)
-
-    -- All Events Section
-    local allEventsSection = Instance.new("Frame", eventDetectorScrollFrame)
-    allEventsSection.Size = UDim2.new(1, -20, 0, 400)
-    allEventsSection.Position = UDim2.new(0, 10, 0, 350)
-    allEventsSection.BackgroundColor3 = Color3.fromRGB(40,40,46)
-    local allEventsCorner = Instance.new("UICorner", allEventsSection)
-    allEventsCorner.CornerRadius = UDim.new(0, 8)
-
-    local allEventsTitle = Instance.new("TextLabel", allEventsSection)
-    allEventsTitle.Size = UDim2.new(1, -20, 0, 25)
-    allEventsTitle.Position = UDim2.new(0, 10, 0, 5)
-    allEventsTitle.Text = "📋 All Events & Teleport Locations"
-    allEventsTitle.Font = Enum.Font.GothamSemibold
-    allEventsTitle.TextSize = 14
-    allEventsTitle.TextColor3 = Color3.fromRGB(235,235,235)
-    allEventsTitle.BackgroundTransparency = 1
-    allEventsTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-    local allEventsList = Instance.new("ScrollingFrame", allEventsSection)
-    allEventsList.Size = UDim2.new(1, -20, 1, -35)
-    allEventsList.Position = UDim2.new(0, 10, 0, 30)
-    allEventsList.BackgroundColor3 = Color3.fromRGB(35,35,41)
-    allEventsList.BorderSizePixel = 0
-    allEventsList.ScrollBarThickness = 4
-    allEventsList.ScrollBarImageColor3 = Color3.fromRGB(80,80,90)
-    allEventsList.CanvasSize = UDim2.new(0, 0, 0, 0)
-    local allEventsListCorner = Instance.new("UICorner", allEventsList)
-    allEventsListCorner.CornerRadius = UDim.new(0, 6)
-
-    -- Event Detector Functions
-    local function UpdateActiveEventsList()
-        -- Clear existing items
-        for _, child in pairs(activeEventsList:GetChildren()) do
-            if child:IsA("Frame") then
-                child:Destroy()
-            end
-        end
-
-        if not EventDetector then return end
-
-        local activeEvents = EventDetector:GetActiveEvents()
-        local yPos = 0
-
-        for eventName, eventData in pairs(activeEvents) do
-            local eventFrame = Instance.new("Frame", activeEventsList)
-            eventFrame.Size = UDim2.new(1, -10, 0, 45)
-            eventFrame.Position = UDim2.new(0, 5, 0, yPos)
-            eventFrame.BackgroundColor3 = Color3.fromRGB(50,50,56)
-            local eventFrameCorner = Instance.new("UICorner", eventFrame)
-            eventFrameCorner.CornerRadius = UDim.new(0, 6)
-
-            local eventLabel = Instance.new("TextLabel", eventFrame)
-            eventLabel.Size = UDim2.new(0.6, -5, 1, 0)
-            eventLabel.Position = UDim2.new(0, 5, 0, 0)
-            eventLabel.Text = string.format("%s %s", eventData.icon, eventData.name)
-            eventLabel.Font = Enum.Font.GothamSemibold
-            eventLabel.TextSize = 12
-            eventLabel.TextColor3 = Color3.fromRGB(100,255,100)
-            eventLabel.BackgroundTransparency = 1
-            eventLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-            local teleportBtn = Instance.new("TextButton", eventFrame)
-            teleportBtn.Size = UDim2.new(0.35, -5, 0, 30)
-            teleportBtn.Position = UDim2.new(0.65, 0, 0, 7.5)
-            teleportBtn.Text = "🚀 Teleport"
-            teleportBtn.Font = Enum.Font.GothamSemibold
-            teleportBtn.TextSize = 10
-            teleportBtn.BackgroundColor3 = Color3.fromRGB(70,130,255)
-            teleportBtn.TextColor3 = Color3.fromRGB(255,255,255)
-            local teleportBtnCorner = Instance.new("UICorner", teleportBtn)
-            teleportBtnCorner.CornerRadius = UDim.new(0, 4)
-
-            teleportBtn.MouseButton1Click:Connect(function()
-                if EventDetector then
-                    EventDetector:TeleportToEvent(eventName)
-                end
-            end)
-
-            yPos = yPos + 50
-        end
-
-        activeEventsList.CanvasSize = UDim2.new(0, 0, 0, yPos)
-    end
-
-    local function CreateAllEventsUI()
-        if not EventDetector then return end
-
-        local yPos = 0
-        for eventName, eventData in pairs(EventDetector.Events) do
-            local eventFrame = Instance.new("Frame", allEventsList)
-            eventFrame.Size = UDim2.new(1, -10, 0, 80)
-            eventFrame.Position = UDim2.new(0, 5, 0, yPos)
-            eventFrame.BackgroundColor3 = Color3.fromRGB(50,50,56)
-            local eventFrameCorner = Instance.new("UICorner", eventFrame)
-            eventFrameCorner.CornerRadius = UDim.new(0, 6)
-
-            local eventLabel = Instance.new("TextLabel", eventFrame)
-            eventLabel.Size = UDim2.new(1, -10, 0, 20)
-            eventLabel.Position = UDim2.new(0, 5, 0, 5)
-            eventLabel.Text = string.format("%s %s", eventData.icon, eventData.name)
-            eventLabel.Font = Enum.Font.GothamSemibold
-            eventLabel.TextSize = 12
-            eventLabel.TextColor3 = Color3.fromRGB(235,235,235)
-            eventLabel.BackgroundTransparency = 1
-            eventLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-            -- Create teleport buttons for each location
-            local btnIndex = 0
-            for locationName, position in pairs(eventData.locations) do
-                local locationBtn = Instance.new("TextButton", eventFrame)
-                locationBtn.Size = UDim2.new(0.45, -5, 0, 25)
-                locationBtn.Position = UDim2.new((btnIndex % 2) * 0.5 + 0.025, 0, 0, 30 + math.floor(btnIndex / 2) * 30)
-                locationBtn.Text = string.format("📍 %s", locationName)
-                locationBtn.Font = Enum.Font.Gotham
-                locationBtn.TextSize = 9
-                locationBtn.BackgroundColor3 = Color3.fromRGB(60,60,66)
-                locationBtn.TextColor3 = Color3.fromRGB(200,200,200)
-                local locationBtnCorner = Instance.new("UICorner", locationBtn)
-                locationBtnCorner.CornerRadius = UDim.new(0, 4)
-
-                locationBtn.MouseButton1Click:Connect(function()
-                    if EventDetector then
-                        EventDetector:TeleportToLocation(eventName, locationName)
-                    end
-                end)
-
-                btnIndex = btnIndex + 1
-            end
-
-            yPos = yPos + 85
-        end
-
-        allEventsList.CanvasSize = UDim2.new(0, 0, 0, yPos)
-    end
-
-    -- Event Detector Button Functions
-    startDetectionBtn.MouseButton1Click:Connect(function()
-        if EventDetector then
-            EventDetector:StartScanning()
-            startDetectionBtn.BackgroundColor3 = Color3.fromRGB(40,120,60)
-            stopDetectionBtn.BackgroundColor3 = Color3.fromRGB(200,80,80)
-        end
-    end)
-
-    stopDetectionBtn.MouseButton1Click:Connect(function()
-        if EventDetector then
-            EventDetector:StopScanning()
-            startDetectionBtn.BackgroundColor3 = Color3.fromRGB(60,180,80)
-            stopDetectionBtn.BackgroundColor3 = Color3.fromRGB(160,60,60)
-            UpdateActiveEventsList() -- Clear active events
-        end
-    end)
-
-    autoTeleportToggle.MouseButton1Click:Connect(function()
-        if EventDetector then
-            local isEnabled = EventDetector:ToggleAutoTeleport()
-            autoTeleportToggle.Text = "🚀 Auto Teleport: " .. (isEnabled and "ON" or "OFF")
-            autoTeleportToggle.BackgroundColor3 = isEnabled and Color3.fromRGB(60,180,80) or Color3.fromRGB(60,60,66)
-            autoTeleportToggle.TextColor3 = isEnabled and Color3.fromRGB(255,255,255) or Color3.fromRGB(200,200,200)
-        end
-    end)
-
-    -- Update active events every 3 seconds
-    spawn(function()
-        while true do
-            wait(3)
-            if EventDetector and eventDetectorFrame.Visible then
-                UpdateActiveEventsList()
-            end
-        end
-    end)
-
-    -- Initialize all events UI when ready (safe version)
-    spawn(function()
-        wait(5) -- Wait longer for EventDetector to load
-        if EventDetector and EventDetector.Events and type(EventDetector.Events) == "table" then
-            CreateAllEventsUI()
-        else
-            -- Create placeholder UI
-            local noEventsLabel = Instance.new("TextLabel", allEventsList)
-            noEventsLabel.Size = UDim2.new(1, -10, 0, 60)
-            noEventsLabel.Position = UDim2.new(0, 5, 0, 10)
-            noEventsLabel.BackgroundTransparency = 1
-            noEventsLabel.Text = "EventDetector loading...\nCheck back in a moment"
-            noEventsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-            noEventsLabel.TextSize = 14
-            noEventsLabel.Font = Enum.Font.Gotham
-            noEventsLabel.TextXAlignment = Enum.TextXAlignment.Center
-        end
-    end)
-
     -- Robust tab switching: collect tabs and provide SwitchTo
-    local Tabs = { FishingAI = fishingAIFrame, Teleport = teleportFrame, Player = playerFrame, Feature = featureFrame, Dashboard = dashboardFrame, EventDetector = eventDetectorFrame }
+    local Tabs = { FishingAI = fishingAIFrame, Teleport = teleportFrame, Player = playerFrame, Feature = featureFrame, Dashboard = dashboardFrame }
     local function SwitchTo(name)
         for k, v in pairs(Tabs) do
             v.Visible = (k == name)
@@ -4587,8 +4228,6 @@ local function BuildUI()
             featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            eventDetectorTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            eventDetectorTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Smart AI Fishing Configuration"
         elseif name == "Teleport" then
             teleportTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
@@ -4601,8 +4240,6 @@ local function BuildUI()
             featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            eventDetectorTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            eventDetectorTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Island Locations"
         elseif name == "Player" then
             playerTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
@@ -4615,8 +4252,6 @@ local function BuildUI()
             featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            eventDetectorTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            eventDetectorTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Player Teleport"
             updatePlayerList(searchBox.Text) -- Refresh when switching to player tab
         elseif name == "Feature" then
@@ -4630,8 +4265,6 @@ local function BuildUI()
             playerTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            eventDetectorTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            eventDetectorTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Character Features"
         else -- Dashboard
             dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
@@ -4644,27 +4277,7 @@ local function BuildUI()
             playerTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             featureTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
             featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            eventDetectorTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            eventDetectorTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
             contentTitle.Text = "Fishing Analytics"
-        elseif name == "EventDetector" then
-            if not EventDetector then
-                contentTitle.Text = "Event Detection - Loading..."
-                return
-            end
-            eventDetectorTabBtn.BackgroundColor3 = Color3.fromRGB(45,45,50)
-            eventDetectorTabBtn.TextColor3 = Color3.fromRGB(235,235,235)
-            fishingAITabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            fishingAITabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            teleportTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            teleportTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            playerTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            playerTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            featureTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            featureTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            dashboardTabBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-            dashboardTabBtn.TextColor3 = Color3.fromRGB(200,200,200)
-            contentTitle.Text = "Event Detection"
         end
     end
 
@@ -4673,7 +4286,6 @@ local function BuildUI()
     playerTabBtn.MouseButton1Click:Connect(function() SwitchTo("Player") end)
     featureTabBtn.MouseButton1Click:Connect(function() SwitchTo("Feature") end)
     dashboardTabBtn.MouseButton1Click:Connect(function() SwitchTo("Dashboard") end)
-    eventDetectorTabBtn.MouseButton1Click:Connect(function() SwitchTo("EventDetector") end)
 
     -- Start with FishingAI visible (replaces Main)
     SwitchTo("FishingAI")
