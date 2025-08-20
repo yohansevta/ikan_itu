@@ -103,6 +103,15 @@ local RodFix = {
     chargingConnection = nil
 }
 
+-- Game Auto Mimic State (moved to top for early definition)
+local GameAutoMimicState = {
+    enabled = false,
+    currentGUID = nil,
+    sessionActive = false,
+    lastAction = 0,
+    fishCaught = 0
+}
+
 -- Create Main Window with purple dark theme
 local Window = Rayfield:CreateWindow({
     Name = Config.windowTitle,
@@ -129,71 +138,81 @@ local FishingTab = Window:CreateTab("🤖 Fishing AI", 4483362458)
 -- Fishing AI Main Section
 local FishingSection = FishingTab:CreateSection("🎣 AI Fishing Control")
 
--- Mode Selection
+-- Mode Selection with safe callback
 local ModeDropdown = FishingTab:CreateDropdown({
     Name = "🧠 Fishing Mode",
     Options = {"Smart AI", "Secure Mode", "Fast Mode", "Game Auto Mimic", "Auto Loop"},
     CurrentOption = "Smart AI",
     Flag = "FishingMode",
     Callback = function(option)
-        local modes = {
-            ["Smart AI"] = "smart",
-            ["Secure Mode"] = "secure",
-            ["Fast Mode"] = "fast",
-            ["Game Auto Mimic"] = "gameautomimic",
-            ["Auto Loop"] = "auto"
-        }
-        Config.mode = modes[option] or "smart"
-        Status.fishingMode = option
-        Notify("Fishing AI", "Mode set to: " .. option)
+        pcall(function()
+            local modes = {
+                ["Smart AI"] = "smart",
+                ["Secure Mode"] = "secure", 
+                ["Fast Mode"] = "fast",
+                ["Game Auto Mimic"] = "gameautomimic",
+                ["Auto Loop"] = "auto"
+            }
+            Config.mode = modes[option] or "smart"
+            Status.fishingMode = option
+            Notify("Fishing AI", "Mode set to: " .. tostring(option))
+        end)
     end
 })
 
--- Main Control Buttons
+-- Main Control Buttons with safe callbacks
 local StartButton = FishingTab:CreateButton({
     Name = "🚀 Start Fishing AI",
     Callback = function()
-        if Config.enabled then
-            Notify("Fishing AI", "Already running!")
-            return
-        end
-        
-        Config.enabled = true
-        sessionId = sessionId + 1
-        Status.isRunning = true
-        Status.sessionTime = tick()
-        
-        -- Start fishing based on selected mode
-        task.spawn(function()
-            AutofishRunner(sessionId)
+        pcall(function()
+            if Config.enabled then
+                Notify("Fishing AI", "Already running!")
+                return
+            end
+            
+            Config.enabled = true
+            sessionId = sessionId + 1
+            Status.isRunning = true
+            Status.sessionTime = tick()
+            
+            -- Start fishing based on selected mode
+            task.spawn(function()
+                AutofishRunner(sessionId)
+            end)
+            
+            Notify("Fishing AI", "Started: " .. tostring(Status.fishingMode))
+            if UpdateStatusDisplay then
+                UpdateStatusDisplay()
+            end
         end)
-        
-        Notify("Fishing AI", "🚀 " .. Status.fishingMode .. " started!")
-        UpdateStatusDisplay()
     end
 })
 
 local StopButton = FishingTab:CreateButton({
     Name = "🛑 Stop Fishing AI", 
     Callback = function()
-        if not Config.enabled then
-            Notify("Fishing AI", "Not running!")
-            return
-        end
-        
-        -- Stop GameAutoMimic if it was running
-        if Config.mode == "gameautomimic" then
-            GameAutoMimicState.sessionActive = false
-            GameAutoMimicState.enabled = false
-            print("[GameAutoMimic] Session stopped via main stop button")
-        end
-        
-        Config.enabled = false
-        sessionId = sessionId + 1
-        Status.isRunning = false
-        
-        Notify("Fishing AI", "🛑 Fishing AI stopped!")
-        UpdateStatusDisplay()
+        pcall(function()
+            if not Config.enabled then
+                Notify("Fishing AI", "Not running!")
+                return
+            end
+            
+            -- Stop GameAutoMimic if it was running
+            if Config.mode == "gameautomimic" and GameAutoMimicState then
+                GameAutoMimicState.sessionActive = false
+                GameAutoMimicState.enabled = false
+                print("[GameAutoMimic] Session stopped via main stop button")
+            end
+            
+            Config.enabled = false
+            sessionId = sessionId + 1
+            Status.isRunning = false
+            
+            Notify("Fishing AI", "Fishing AI stopped!")
+            if UpdateStatusDisplay then
+                UpdateStatusDisplay()
+            end
+        end)
     end
 })
 
@@ -205,7 +224,7 @@ local StatusLabel = FishingTab:CreateLabel("Status: Idle | Fish: 0 | Time: 0s")
 -- Advanced Settings Section  
 local AdvancedSection = FishingTab:CreateSection("⚙️ Advanced Settings")
 
--- Recast Delay Slider
+-- Recast Delay Slider with safe callback
 local RecastSlider = FishingTab:CreateSlider({
     Name = "⏱️ Recast Delay",
     Range = {0.01, 1.0},
@@ -214,12 +233,14 @@ local RecastSlider = FishingTab:CreateSlider({
     CurrentValue = Config.autoRecastDelay,
     Flag = "RecastDelay",
     Callback = function(value)
-        Config.autoRecastDelay = value
-        Notify("Settings", "Recast delay: " .. value .. "s")
+        pcall(function()
+            Config.autoRecastDelay = value
+            Notify("Settings", "Recast delay: " .. tostring(value) .. "s")
+        end)
     end
 })
 
--- Safe Mode Chance Slider
+-- Safe Mode Chance Slider with safe callback
 local SafeModeSlider = FishingTab:CreateSlider({
     Name = "🛡️ Safe Mode Chance",
     Range = {0, 100},
@@ -228,25 +249,33 @@ local SafeModeSlider = FishingTab:CreateSlider({
     CurrentValue = Config.safeModeChance,
     Flag = "SafeModeChance", 
     Callback = function(value)
-        Config.safeModeChance = value
-        Notify("Settings", "Safe mode chance: " .. value .. "%")
+        pcall(function()
+            Config.safeModeChance = value
+            Notify("Settings", "Safe mode chance: " .. tostring(value) .. "%")
+        end)
     end
 })
 
--- Anti-AFK Toggle
+-- Anti-AFK Toggle with safe callback
 local AntiAfkToggle = FishingTab:CreateToggle({
     Name = "🛡️ Anti-AFK Protection",
     CurrentValue = false,
     Flag = "AntiAfk",
     Callback = function(value)
-        Config.antiAfkEnabled = value
-        if value then
-            StartAntiAfk()
-            Notify("Anti-AFK", "🟢 Protection enabled")
-        else
-            StopAntiAfk()
-            Notify("Anti-AFK", "🔴 Protection disabled")
-        end
+        pcall(function()
+            Config.antiAfkEnabled = value
+            if value then
+                if StartAntiAfk then
+                    StartAntiAfk()
+                end
+                Notify("Anti-AFK", "Protection enabled")
+            else
+                if StopAntiAfk then
+                    StopAntiAfk()
+                end
+                Notify("Anti-AFK", "Protection disabled")
+            end
+        end)
     end
 })
 
@@ -258,28 +287,34 @@ local AutoModeInfo = FishingTab:CreateLabel("⚠️ Auto Loop: Direct FishingCom
 local AutoModeStart = FishingTab:CreateButton({
     Name = "🔥 Start Auto Loop",
     Callback = function()
-        if Config.autoModeEnabled then
-            Notify("Auto Loop", "Already running!")
-            return
-        end
-        
-        Config.autoModeEnabled = true
-        autoModeSessionId = autoModeSessionId + 1
-        
-        task.spawn(function()
-            AutoModeRunner(autoModeSessionId)
+        pcall(function()
+            if Config.autoModeEnabled then
+                Notify("Auto Loop", "Already running!")
+                return
+            end
+            
+            Config.autoModeEnabled = true
+            autoModeSessionId = autoModeSessionId + 1
+            
+            task.spawn(function()
+                if AutoModeRunner then
+                    AutoModeRunner(autoModeSessionId)
+                end
+            end)
+            
+            Notify("Auto Loop", "Auto Loop started!")
         end)
-        
-        Notify("Auto Loop", "🔥 Auto Loop started!")
     end
 })
 
 local AutoModeStop = FishingTab:CreateButton({
     Name = "🛑 Stop Auto Loop",
     Callback = function()
-        Config.autoModeEnabled = false
-        autoModeSessionId = autoModeSessionId + 1
-        Notify("Auto Loop", "🛑 Auto Loop stopped!")
+        pcall(function()
+            Config.autoModeEnabled = false
+            autoModeSessionId = autoModeSessionId + 1
+            Notify("Auto Loop", "Auto Loop stopped!")
+        end)
     end
 })
 
@@ -292,18 +327,20 @@ local GameAutoMimicNote = FishingTab:CreateLabel("✅ RequestChargeFishingRod �
 
 local GameAutoMimicSafety = FishingTab:CreateLabel("🛡️ Built-in: OnCooldown() • NoInventorySpace() • GUID tracking")
 
--- Rod Orientation Fix Toggle
+-- Rod Orientation Fix Toggle with safe callback
 local RodFixToggle = FishingTab:CreateToggle({
     Name = "🔧 Rod Orientation Fix",
     CurrentValue = true,
     Flag = "RodOrientationFix",
     Callback = function(value)
-        RodFix.enabled = value
-        if value then
-            Notify("Rod Fix", "🟢 Rod orientation fix enabled")
-        else
-            Notify("Rod Fix", "🔴 Rod orientation fix disabled")
-        end
+        pcall(function()
+            RodFix.enabled = value
+            if value then
+                Notify("Rod Fix", "Rod orientation fix enabled")
+            else
+                Notify("Rod Fix", "Rod orientation fix disabled")
+            end
+        end)
     end
 })
 
@@ -498,15 +535,6 @@ local function DoSecureCycle()
     Status.fishCaught = Status.fishCaught + 1
     print("[Secure Mode] Completed! Total fish:", Status.fishCaught)
 end
-
--- Game Auto Mimic State
-local GameAutoMimicState = {
-    enabled = false,
-    currentGUID = nil,
-    sessionActive = false,
-    lastAction = 0,
-    fishCaught = 0
-}
 
 local function GenerateSessionGUID()
     return string.format("%08x-%04x-%04x", 
@@ -718,20 +746,27 @@ function StopAntiAfk()
     end
 end
 
--- Status Update Function
+-- Status Update Function with UI update
 function UpdateStatusDisplay()
-    local status = Status.isRunning and "Running" or "Idle"
-    local sessionDuration = Status.isRunning and (tick() - Status.sessionTime) or 0
-    local timeText = string.format("%.0fs", sessionDuration)
-    
-    if sessionDuration > 60 then
-        timeText = string.format("%.1fm", sessionDuration / 60)
-    end
-    
-    local statusText = string.format("Status: %s | Fish: %d | Time: %s", 
-                                   status, Status.fishCaught, timeText)
-    
-    print("[Status]", statusText)
+    pcall(function()
+        local status = Status.isRunning and "Running" or "Idle"
+        local sessionDuration = Status.isRunning and (tick() - Status.sessionTime) or 0
+        local timeText = string.format("%.0fs", sessionDuration)
+        
+        if sessionDuration > 60 then
+            timeText = string.format("%.1fm", sessionDuration / 60)
+        end
+        
+        local statusText = string.format("Status: %s | Fish: %d | Time: %s", 
+                                       status, Status.fishCaught, timeText)
+        
+        -- Update UI label if it exists
+        if StatusLabel and StatusLabel.Text then
+            StatusLabel.Text = statusText
+        end
+        
+        print("[Status]", statusText)
+    end)
 end
 
 -- Auto-update status every 2 seconds
