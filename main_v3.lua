@@ -267,44 +267,290 @@ local AutoModeStop = FishingTab:CreateButton({
 })
 
 -- ===================================================================
--- CORE FISHING FUNCTIONS
+-- ROD ORIENTATION FIX SYSTEM
 -- ===================================================================
 
--- Simple notification wrapper
-local function simpleNotify(text)
-    Notify("AutoFish", text)
+-- Rod Orientation Fix
+local RodFix = {
+    enabled = true,
+    lastFixTime = 0,
+    isCharging = false,
+    chargingConnection = nil
+}
+
+local function FixRodOrientation()
+    if not RodFix.enabled then return end
+    
+    local now = tick()
+    if now - RodFix.lastFixTime < 0.05 then return end -- Throttle fixes
+    RodFix.lastFixTime = now
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local equippedTool = character:FindFirstChildOfClass("Tool")
+    if not equippedTool then return end
+    
+    -- Pastikan ini fishing rod
+    local isRod = equippedTool.Name:lower():find("rod") or 
+                  equippedTool:FindFirstChild("Rod") or
+                  equippedTool:FindFirstChild("Handle")
+    if not isRod then return end
+    
+    -- Method 1: Fix Motor6D during charging phase (paling efektif)
+    local rightArm = character:FindFirstChild("Right Arm")
+    if rightArm then
+        local rightGrip = rightArm:FindFirstChild("RightGrip")
+        if rightGrip and rightGrip:IsA("Motor6D") then
+            -- Orientasi normal untuk rod menghadap depan SELAMA charging
+            rightGrip.C0 = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            rightGrip.C1 = CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, 0)
+            return
+        end
+    end
+    
+    -- Method 2: Fix Tool Grip Value (untuk tools dengan custom grip)
+    local handle = equippedTool:FindFirstChild("Handle")
+    if handle then
+        local toolGrip = equippedTool:FindFirstChild("Grip")
+        if toolGrip and toolGrip:IsA("CFrameValue") then
+            toolGrip.Value = CFrame.new(0, -1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            return
+        end
+        
+        -- Jika tidak ada grip value, buat yang baru
+        if not toolGrip then
+            toolGrip = Instance.new("CFrameValue")
+            toolGrip.Name = "Grip"
+            toolGrip.Value = CFrame.new(0, -1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            toolGrip.Parent = equippedTool
+        end
+    end
 end
 
--- Basic Auto Mode Runner
+-- Monitor when player equips/unequips tools
+LocalPlayer.CharacterAdded:Connect(function(character)
+    character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            task.wait(0.1) -- Wait for tool to fully load
+            FixRodOrientation()
+        end
+    end)
+    
+    character.ChildRemoved:Connect(function(child)
+        if child:IsA("Tool") and RodFix.chargingConnection then
+            RodFix.chargingConnection:Disconnect()
+            RodFix.chargingConnection = nil
+        end
+    end)
+end)
+
+-- Fix current tool if character already exists
+if LocalPlayer.Character then
+    LocalPlayer.Character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            task.wait(0.1)
+            FixRodOrientation()
+        end
+    end)
+    
+    -- Check if rod is already equipped
+    local currentTool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if currentTool then
+        FixRodOrientation()
+    end
+end
+
+-- ===================================================================
+-- CORE FISHING FUNCTIONS (From working scriptcontoh.lua)
+-- ===================================================================
+
+-- Remote helper (best-effort)
+local function FindNet()
+    local ok, net = pcall(function()
+        local packages = ReplicatedStorage:FindFirstChild("Packages")
+        if not packages then return nil end
+        local idx = packages:FindFirstChild("_Index")
+        if not idx then return nil end
+        local sleit = idx:FindFirstChild("sleitnick_net@0.2.0")
+        if not sleit then return nil end
+        return sleit:FindFirstChild("net")
+    end)
+    return ok and net or nil
+end
+
+local net = FindNet()
+local function ResolveRemote(name)
+    if not net then return nil end
+    local ok, rem = pcall(function() return net:FindFirstChild(name) end)
+    return ok and rem or nil
+end
+
+-- Critical fishing remotes
+local rodRemote = ResolveRemote("RF/ChargeFishingRod")
+local miniGameRemote = ResolveRemote("RF/RequestFishingMinigameStarted")
+local finishRemote = ResolveRemote("RE/FishingCompleted")
+local equipRemote = ResolveRemote("RE/EquipToolFromHotbar")
+
+local function safeInvoke(remote, ...)
+    if not remote then return false, "nil_remote" end
+    if remote:IsA("RemoteFunction") then
+        return pcall(function(...) return remote:InvokeServer(...) end, ...)
+    else
+        return pcall(function(...) remote:FireServer(...) return true end, ...)
+    end
+end
+
+local function GetServerTime()
+    local ok, st = pcall(function() return workspace:GetServerTimeNow() end)
+    if ok and type(st) == "number" then return st end
+    return tick()
+end
+
+-- Smart Fishing Cycle (Working implementation)
+local function DoSmartCycle()
+    -- Phase 1: Equip and fix rod orientation
+    FixRodOrientation() -- Fix rod orientation at start
+    if equipRemote then 
+        pcall(function() equipRemote:FireServer(1) end)
+        task.wait(0.1)
+    end
+    
+    -- Phase 2: Charge rod with perfect timing
+    FixRodOrientation() -- Fix during charging phase (critical!)
+    local usePerfect = math.random(1,100) <= Config.safeModeChance
+    local timestamp = usePerfect and GetServerTime() or GetServerTime() + math.random()*0.5
+    
+    if rodRemote and rodRemote:IsA("RemoteFunction") then 
+        pcall(function() rodRemote:InvokeServer(timestamp) end)
+    end
+    
+    -- Keep fixing orientation during charging
+    local chargeStart = tick()
+    local chargeDuration = 0.8 + math.random()*0.4
+    while tick() - chargeStart < chargeDuration do
+        FixRodOrientation() -- Keep fixing during charge animation
+        task.wait(0.02) -- Frequent fixes during charging
+    end
+    
+    -- Phase 3: Mini-game (accurate values for success)
+    FixRodOrientation() -- Fix before casting
+    local x = usePerfect and -1.238 or (math.random(-1000,1000)/1000)
+    local y = usePerfect and 0.969 or (math.random(0,1000)/1000)
+    
+    if miniGameRemote and miniGameRemote:IsA("RemoteFunction") then 
+        pcall(function() miniGameRemote:InvokeServer(x,y) end)
+    end
+    
+    task.wait(1.2 + math.random()*0.6) -- Wait for fish
+    
+    -- Phase 4: Complete fishing
+    FixRodOrientation() -- Fix before completion
+    if finishRemote then 
+        pcall(function() finishRemote:FireServer() end)
+    end
+    
+    -- Update stats
+    Status.fishCaught = Status.fishCaught + 1
+    print("[Smart Mode] Fish caught! Total:", Status.fishCaught)
+end
+
+-- Secure Fishing Cycle 
+local function DoSecureCycle()
+    -- Equip rod first
+    if equipRemote then 
+        pcall(function() equipRemote:FireServer(1) end)
+        task.wait(0.1)
+    end
+    
+    -- Secure mode: random between perfect and normal cast
+    local usePerfect = math.random(1,100) <= Config.safeModeChance
+    
+    -- Charge rod with proper timing
+    local timestamp = usePerfect and 9999999999 or (tick() + math.random())
+    if rodRemote then
+        pcall(function() rodRemote:InvokeServer(timestamp) end)
+    end
+    
+    task.wait(0.1 + math.random()*0.1) -- Variable charge wait
+    
+    -- Mini-game with secure values
+    local x = usePerfect and -1.238 or (math.random(-1000,1000)/1000)
+    local y = usePerfect and 0.969 or (math.random(0,1000)/1000)
+    
+    if miniGameRemote then
+        pcall(function() miniGameRemote:InvokeServer(x, y) end)
+    end
+    
+    task.wait(1.3 + math.random()*0.4) -- Variable fishing wait
+    
+    -- Complete fishing
+    if finishRemote then 
+        pcall(function() finishRemote:FireServer() end)
+    end
+    
+    -- Update stats
+    Status.fishCaught = Status.fishCaught + 1
+    print("[Secure Mode] Fish caught! Total:", Status.fishCaught)
+end
+
+-- Auto Mode Runner (Direct FishingCompleted spam)
 function AutoModeRunner(mySessionId)
-    simpleNotify("🔥 Auto Mode started")
+    Notify("Auto Mode", "🔥 Auto Mode started! Spamming FishingCompleted...")
     while Config.autoModeEnabled and autoModeSessionId == mySessionId do
-        -- Placeholder for actual fishing logic
-        pcall(function()
-            print("[Auto Mode] Running cycle...")
-            -- Here would go the actual FishingCompleted event firing
-        end)
-        task.wait(Config.autoRecastDelay or 1)
+        if finishRemote then
+            pcall(function()
+                finishRemote:FireServer()
+            end)
+            Status.fishCaught = Status.fishCaught + 1
+        else
+            warn("Auto Mode: finishRemote not found!")
+            Config.autoModeEnabled = false
+            break
+        end
+        task.wait(0.5) -- Fast spam rate
     end
     if autoModeSessionId == mySessionId then
-        simpleNotify("🔥 Auto Mode stopped")
+        Notify("Auto Mode", "🔥 Auto Mode stopped")
     end
 end
 
--- Basic Autofish Runner
+-- Main Autofish Runner with real fishing logic
 function AutofishRunner(mySessionId)
-    simpleNotify("🤖 " .. Status.fishingMode .. " started")
+    Notify("Fishing AI", "🤖 " .. Status.fishingMode .. " started")
     while Config.enabled and sessionId == mySessionId do
-        pcall(function()
-            -- Placeholder for actual fishing logic
-            print("[Fishing AI] Running " .. Config.mode .. " cycle...")
-            Status.fishCaught = Status.fishCaught + 1
+        local ok, err = pcall(function()
+            if Config.mode == "secure" then 
+                DoSecureCycle() 
+            elseif Config.mode == "auto" then
+                -- Auto mode just spams finish
+                if finishRemote then
+                    finishRemote:FireServer()
+                    Status.fishCaught = Status.fishCaught + 1
+                end
+            else 
+                DoSmartCycle() -- Default smart mode
+            end
             UpdateStatusDisplay()
         end)
-        task.wait(Config.autoRecastDelay + 1)
+        
+        if not ok then
+            warn("Fishing cycle error:", err)
+            task.wait(1)
+        end
+        
+        -- Dynamic delay based on mode
+        local delay = Config.autoRecastDelay
+        if Config.mode == "secure" then
+            delay = delay + math.random()*0.3 -- Add randomness for secure mode
+        elseif Config.mode == "auto" then
+            delay = 0.3 -- Fast for auto mode
+        end
+        
+        task.wait(delay)
     end
     if sessionId == mySessionId then
-        simpleNotify("🤖 Fishing AI stopped")
+        Notify("Fishing AI", "🤖 Fishing AI stopped")
     end
 end
 
