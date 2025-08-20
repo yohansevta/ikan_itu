@@ -95,6 +95,14 @@ local Status = {
     isRunning = false
 }
 
+-- Rod Orientation Fix
+local RodFix = {
+    enabled = true,
+    lastFixTime = 0,
+    isCharging = false,
+    chargingConnection = nil
+}
+
 -- Create Main Window with purple dark theme
 local Window = Rayfield:CreateWindow({
     Name = Config.windowTitle,
@@ -284,18 +292,6 @@ local GameAutoMimicNote = FishingTab:CreateLabel("✅ RequestChargeFishingRod �
 
 local GameAutoMimicSafety = FishingTab:CreateLabel("🛡️ Built-in: OnCooldown() • NoInventorySpace() • GUID tracking")
 
--- ===================================================================
--- ROD ORIENTATION FIX SYSTEM
--- ===================================================================
-
--- Rod Orientation Fix
-local RodFix = {
-    enabled = true,
-    lastFixTime = 0,
-    isCharging = false,
-    chargingConnection = nil
-}
-
 -- Rod Orientation Fix Toggle
 local RodFixToggle = FishingTab:CreateToggle({
     Name = "🔧 Rod Orientation Fix",
@@ -310,6 +306,43 @@ local RodFixToggle = FishingTab:CreateToggle({
         end
     end
 })
+
+-- ===================================================================
+-- CORE FISHING FUNCTIONS
+-- ===================================================================
+
+-- Remote helper (best-effort)
+local function FindNet()
+    local ok, net = pcall(function()
+        local packages = ReplicatedStorage:FindFirstChild("Packages")
+        if not packages then return nil end
+        local idx = packages:FindFirstChild("_Index")
+        if not idx then return nil end
+        local sleit = idx:FindFirstChild("sleitnick_net@0.2.0")
+        if not sleit then return nil end
+        return sleit:FindFirstChild("net")
+    end)
+    return ok and net or nil
+end
+
+local net = FindNet()
+local function ResolveRemote(name)
+    if not net then return nil end
+    local ok, rem = pcall(function() return net:FindFirstChild(name) end)
+    return ok and rem or nil
+end
+
+-- Critical fishing remotes
+local rodRemote = ResolveRemote("RF/ChargeFishingRod")
+local miniGameRemote = ResolveRemote("RF/RequestFishingMinigameStarted")
+local finishRemote = ResolveRemote("RE/FishingCompleted")
+local equipRemote = ResolveRemote("RE/EquipToolFromHotbar")
+
+local function GetServerTime()
+    local ok, st = pcall(function() return workspace:GetServerTimeNow() end)
+    if ok and type(st) == "number" then return st end
+    return tick()
+end
 
 -- Enhanced Rod Orientation Fix with multiple methods
 local function FixRodOrientation()
@@ -368,317 +401,48 @@ local function FixRodOrientation()
     print("[FixRodOrientation] Rod orientation fixed for:", equippedTool.Name)
 end
 
--- Alternative: Force rod to face forward using CFrame manipulation
-local function ForceRodDirection()
-    local character = LocalPlayer.Character
-    if not character then return end
-    
-    local equippedTool = character:FindFirstChildOfClass("Tool")
-    if not equippedTool then return end
-    
-    local handle = equippedTool:FindFirstChild("Handle")
-    if not handle then return end
-    
-    -- Force handle to face forward
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if rootPart then
-        local forwardDirection = rootPart.CFrame.LookVector
-        handle.CFrame = CFrame.lookAt(handle.Position, handle.Position + forwardDirection)
-        print("[ForceRodDirection] Rod forced to face forward")
-    end
-end
-
--- Simple rod equip function with orientation fix
-local function ForceEquipRod()
-    if not equipRemote then return false end
-    
-    local character = LocalPlayer.Character
-    if not character then return false end
-    
-    -- Unequip current tool first
-    local currentTool = character:FindFirstChildOfClass("Tool")
-    if currentTool then
-        local humanoid = character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid:UnequipTools()
-            task.wait(0.1)
-        end
-    end
-    
-    -- Equip fishing rod
-    local success = pcall(function()
-        equipRemote:FireServer(1)
-    end)
-    
-    if success then
-        task.wait(0.2) -- Wait for equip
-        FixRodOrientation() -- Fix orientation after equip
-        task.wait(0.1)
-        ForceRodDirection() -- Force direction as backup
-        print("[ForceEquipRod] Rod equipped with orientation fix")
-        return true
-    end
-    
-    return false
-end
-
--- Monitor when player equips/unequips tools
-LocalPlayer.CharacterAdded:Connect(function(character)
-    character.ChildAdded:Connect(function(child)
-        if child:IsA("Tool") then
-            task.wait(0.1) -- Wait for tool to fully load
-            FixRodOrientation()
-        end
-    end)
-    
-    character.ChildRemoved:Connect(function(child)
-        if child:IsA("Tool") and RodFix.chargingConnection then
-            RodFix.chargingConnection:Disconnect()
-            RodFix.chargingConnection = nil
-        end
-    end)
-end)
-
--- Fix current tool if character already exists
-if LocalPlayer.Character then
-    LocalPlayer.Character.ChildAdded:Connect(function(child)
-        if child:IsA("Tool") then
-            task.wait(0.1)
-            FixRodOrientation()
-        end
-    end)
-    
-    -- Check if rod is already equipped
-    local currentTool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-    if currentTool then
-        FixRodOrientation()
-    end
-end
-
--- ===================================================================
--- CORE FISHING FUNCTIONS (From working scriptcontoh.lua)
--- ===================================================================
-
--- ===================================================================
--- CORE FISHING FUNCTIONS (From working scriptcontoh.lua)
--- ===================================================================
-
--- Remote helper (best-effort)
-local function FindNet()
-    local ok, net = pcall(function()
-        local packages = ReplicatedStorage:FindFirstChild("Packages")
-        if not packages then return nil end
-        local idx = packages:FindFirstChild("_Index")
-        if not idx then return nil end
-        local sleit = idx:FindFirstChild("sleitnick_net@0.2.0")
-        if not sleit then return nil end
-        return sleit:FindFirstChild("net")
-    end)
-    return ok and net or nil
-end
-
-local net = FindNet()
-local function ResolveRemote(name)
-    if not net then return nil end
-    local ok, rem = pcall(function() return net:FindFirstChild(name) end)
-    return ok and rem or nil
-end
-
--- Critical fishing remotes
-local rodRemote = ResolveRemote("RF/ChargeFishingRod")
-local miniGameRemote = ResolveRemote("RF/RequestFishingMinigameStarted")
-local finishRemote = ResolveRemote("RE/FishingCompleted")
-local equipRemote = ResolveRemote("RE/EquipToolFromHotbar")
-local function safeInvoke(remote, ...)
-    if not remote then return false, "nil_remote" end
-    if remote:IsA("RemoteFunction") then
-        return pcall(function(...) return remote:InvokeServer(...) end, ...)
-    else
-        return pcall(function(...) remote:FireServer(...) return true end, ...)
-    end
-end
-
-local function GetServerTime()
-    local ok, st = pcall(function() return workspace:GetServerTimeNow() end)
-    if ok and type(st) == "number" then return st end
-    return tick()
-end
-
--- Realistic timing function from scriptcontoh.lua
-local function GetRealisticTiming(phase)
-    local timings = {
-        charging = {min = 0.8, max = 1.5},    -- Rod charging time
-        casting = {min = 0.2, max = 0.4},     -- Cast animation
-        waiting = {min = 2.0, max = 4.0},     -- Wait for fish
-        reeling = {min = 1.0, max = 2.5},     -- Reel animation
-        holding = {min = 0.5, max = 1.0}      -- Hold fish animation
-    }
-    
-    local timing = timings[phase] or {min = 0.5, max = 1.0}
-    return timing.min + math.random() * (timing.max - timing.min)
-end
-
--- Animation Monitor (simplified)
-local AnimationMonitor = {
-    isMonitoring = false,
-    currentState = "idle",
-    fishingSuccess = false
-}
-
--- Smart Fishing Cycle (Exact copy from scriptcontoh.lua)
+-- Simple Smart Fishing Cycle
 local function DoSmartCycle()
-    AnimationMonitor.fishingSuccess = false
-    AnimationMonitor.currentState = "starting"
-    
-    -- Phase 1: Equip and prepare
-    FixRodOrientation() -- Fix rod orientation at start
+    -- Equip rod
     if equipRemote then 
         pcall(function() equipRemote:FireServer(1) end)
-        task.wait(GetRealisticTiming("charging"))
+        task.wait(0.2)
     end
     
-    -- Phase 2: Charge rod (with animation-aware timing)
-    AnimationMonitor.currentState = "charging"
-    FixRodOrientation() -- Fix during charging phase (critical!)
+    FixRodOrientation()
     
+    -- Charge rod
     local usePerfect = math.random(1,100) <= Config.safeModeChance
     local timestamp = usePerfect and GetServerTime() or GetServerTime() + math.random()*0.5
     
-    if rodRemote and rodRemote:IsA("RemoteFunction") then 
+    if rodRemote then 
         pcall(function() rodRemote:InvokeServer(timestamp) end)
     end
     
-    -- Fix orientation continuously during charging
-    local chargeStart = tick()
-    local chargeDuration = GetRealisticTiming("charging")
-    while tick() - chargeStart < chargeDuration do
-        FixRodOrientation() -- Keep fixing during charge animation
-        task.wait(0.02) -- Very frequent fixes during charging
-    end
+    task.wait(1.0) -- Charge wait
     
-    -- Phase 3: Cast (mini-game simulation)
-    AnimationMonitor.currentState = "casting"
-    FixRodOrientation() -- Fix before casting
-    
+    -- Minigame
     local x = usePerfect and -1.238 or (math.random(-1000,1000)/1000)
     local y = usePerfect and 0.969 or (math.random(0,1000)/1000)
     
-    if miniGameRemote and miniGameRemote:IsA("RemoteFunction") then 
+    if miniGameRemote then 
         pcall(function() miniGameRemote:InvokeServer(x,y) end)
     end
     
-    -- Wait for cast animation
-    task.wait(GetRealisticTiming("casting"))
+    task.wait(0.5) -- Minigame wait
     
-    -- Phase 4: Wait for fish (realistic waiting time)
-    AnimationMonitor.currentState = "waiting"
-    task.wait(GetRealisticTiming("waiting"))
-    
-    -- Phase 5: Complete fishing
-    AnimationMonitor.currentState = "completing"
-    FixRodOrientation() -- Fix before completion
-    
+    -- Complete fishing
     if finishRemote then 
         pcall(function() finishRemote:FireServer() end)
     end
     
-    -- Wait for completion and fish catch animations
-    task.wait(GetRealisticTiming("reeling"))
+    task.wait(1.5) -- Completion wait
     
-    AnimationMonitor.currentState = "idle"
     Status.fishCaught = Status.fishCaught + 1
     print("[Smart Cycle] Completed! Total fish:", Status.fishCaught)
 end
 
--- Secure Fishing Cycle (From scriptcontoh.lua)
-local function DoSecureCycle()
-    -- Equip rod first
-    if equipRemote then 
-        local ok = pcall(function() equipRemote:FireServer(1) end)
-        if not ok then print("[Secure Mode] Failed to equip") end
-    end
-    
-    -- Safe mode logic: random between perfect and normal cast
-    local usePerfect = math.random(1,100) <= Config.safeModeChance
-    
-    -- Charge rod with proper timing
-    local timestamp = usePerfect and 9999999999 or (tick() + math.random())
-    if rodRemote then
-        local ok = pcall(function() rodRemote:InvokeServer(timestamp) end)
-        if not ok then print("[Secure Mode] Failed to charge") end
-    end
-    
-    task.wait(0.1) -- Standard charge wait
-    
-    -- Minigame with safe mode values
-    local x = usePerfect and -1.238 or (math.random(-1000,1000)/1000)
-    local y = usePerfect and 0.969 or (math.random(0,1000)/1000)
-    
-    if miniGameRemote then
-        local ok = pcall(function() miniGameRemote:InvokeServer(x, y) end)
-        if not ok then print("[Secure Mode] Failed minigame") end
-    end
-    
-    task.wait(1.3) -- Standard fishing wait
-    
-    -- Complete fishing
-    if finishRemote then 
-        local ok = pcall(function() finishRemote:FireServer() end)
-        if not ok then print("[Secure Mode] Failed to finish") end
-    end
-    
-    Status.fishCaught = Status.fishCaught + 1
-    print("[Secure Mode] Completed! Total fish:", Status.fishCaught)
-end
-
--- Fast Fishing Cycle (Based on autoFishingExtreme from autosistem.lua)
-local function DoFastCycle()
-    -- Minimal safety check for fast mode
-    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-    if humanoid and humanoid.Health < 10 then
-        print("[Fast Mode] Low health detected, pausing...")
-        task.wait(2)
-        return
-    end
-    
-    -- Ultra fast delays
-    local extremeDelay = 0.05 -- Base extreme delay
-    
-    -- Fast equip check
-    local char = LocalPlayer.Character
-    if not char then return end
-    
-    local equippedTool = char:FindFirstChildOfClass("Tool")
-    if not equippedTool then
-        if equipRemote then
-            pcall(function() equipRemote:FireServer(1) end)
-            task.wait(extremeDelay)
-        end
-    end
-    
-    -- Rapid fire fishing sequence
-    -- Fast charge
-    if rodRemote then
-        pcall(function() rodRemote:InvokeServer(GetServerTime()) end)
-    end
-    task.wait(extremeDelay)
-    
-    -- Fast minigame
-    if miniGameRemote then
-        pcall(function() miniGameRemote:InvokeServer(-1.238, 0.969) end) -- Use perfect values for speed
-    end
-    task.wait(extremeDelay)
-    
-    -- Fast complete
-    if finishRemote then
-        pcall(function() finishRemote:FireServer() end)
-    end
-    
-    Status.fishCaught = Status.fishCaught + 1
-    print("[Fast Mode] Completed! Total fish:", Status.fishCaught)
-end
-
--- Game Auto Mimic Cycle (Meniru FishingController steps) - Integrated Version
+-- Game Auto Mimic State
 local GameAutoMimicState = {
     enabled = false,
     currentGUID = nil,
@@ -717,28 +481,22 @@ local function DoGameAutoMimicCycle()
         return
     end
     
-    -- Step 1: Force equip rod with proper orientation
+    -- Step 1: Equip rod if needed
     local character = LocalPlayer.Character
     if character and not character:FindFirstChildOfClass("Tool") then
-        print("[GameAutoMimic] Force equipping fishing rod...")
-        if not ForceEquipRod() then
-            print("[GameAutoMimic] Failed to equip rod")
-            return
+        if equipRemote then
+            print("[GameAutoMimic] Equipping fishing rod...")
+            pcall(function() equipRemote:FireServer(1) end)
+            task.wait(1.0) -- Give time for equip animation
         end
-    else
-        -- Rod already equipped, just fix orientation
-        FixRodOrientation()
-        ForceRodDirection()
     end
     
-    -- Step 2: RequestChargeFishingRod (with enhanced visual)
+    FixRodOrientation()
+    
+    -- Step 2: RequestChargeFishingRod
     print("[GameAutoMimic] Starting rod charge... (you should see charging animation)")
     local usePerfect = math.random(1, 100) <= 85 -- 85% perfect chance
     local timestamp = usePerfect and GetServerTime() or (GetServerTime() + math.random() * 0.5)
-    
-    -- Multiple orientation fixes for better visual
-    FixRodOrientation()
-    ForceRodDirection()
     
     if rodRemote then
         local ok = pcall(function() rodRemote:InvokeServer(timestamp) end)
@@ -749,19 +507,16 @@ local function DoGameAutoMimicCycle()
         print("[GameAutoMimic] Rod charging... (watch the charging bar!)")
     end
     
-    -- Extended charge time with continuous orientation fixing
+    -- Extended charge time to see animation clearly
     local chargeTime = 2.0 + math.random() * 1.0 -- 2-3 seconds for visible charging
     local chargeStart = tick()
     while tick() - chargeStart < chargeTime do
         FixRodOrientation() -- Keep fixing during charge
-        if (tick() - chargeStart) % 0.5 < 0.1 then -- Every 0.5 seconds
-            ForceRodDirection() -- Force direction periodically
-        end
         task.wait(0.1)
     end
     print("[GameAutoMimic] Charge complete!")
     
-    -- Step 3: RequestFishingMinigameClick (with visible minigame)
+    -- Step 3: RequestFishingMinigameClick
     print("[GameAutoMimic] Starting minigame... (you should see the circle minigame)")
     local x = usePerfect and -1.238 or (math.random(-1000, 1000) / 1000)
     local y = usePerfect and 0.969 or (math.random(0, 1000) / 1000)
@@ -778,20 +533,18 @@ local function DoGameAutoMimicCycle()
     -- Wait for minigame to be visible
     task.wait(1.5 + math.random() * 0.5) -- Extended time to see minigame
     
-    -- Step 4: SendFishingRequestToServer (optional validation)
-    -- This step might be used for server-side validation in real game auto
-    print("[GameAutoMimic] SendFishingRequestToServer (simulated)")
+    -- Step 4: Complete
+    task.wait(2.5 + math.random() * 1.0) -- Wait for fish
     
-    task.wait(1.0 + math.random() * 0.5) -- Wait for fish
-    
-    -- Step 5: FishCaught (completion)
+    -- Step 5: FishCaught
+    print("[GameAutoMimic] Completing fishing...")
     if finishRemote then
         local ok = pcall(function() finishRemote:FireServer() end)
         if not ok then
             print("[GameAutoMimic] FishCaught failed")
             return
         end
-        print("[GameAutoMimic] FishCaught success")
+        print("[GameAutoMimic] Fish caught! 🐟")
     end
     
     -- Update state
@@ -824,29 +577,19 @@ function AutoModeRunner(mySessionId)
     end
 end
 
--- Main Autofish Runner (Exact copy from scriptcontoh.lua)
+-- Main Autofish Runner
 function AutofishRunner(mySessionId)
     -- Initialize session stats
     Status.sessionTime = tick()
     Status.fishCaught = 0
     
-    -- Auto-fix rod orientation at start
-    FixRodOrientation()
-    
     Notify("Fishing AI", "🤖 Smart AutoFishing started (mode: " .. Config.mode .. ")")
     while Config.enabled and sessionId == mySessionId do
         local ok, err = pcall(function()
-            -- Fix rod orientation before each cycle
-            FixRodOrientation()
-            
-            if Config.mode == "secure" then 
-                DoSecureCycle()
-            elseif Config.mode == "fast" then
-                DoFastCycle()
-            elseif Config.mode == "gameautomimic" then
+            if Config.mode == "gameautomimic" then
                 DoGameAutoMimicCycle()
             else 
-                DoSmartCycle() -- Default to smart mode
+                DoSmartCycle() -- Default to smart mode for all others
             end
         end)
         if not ok then
@@ -855,21 +598,14 @@ function AutofishRunner(mySessionId)
             task.wait(0.4 + math.random()*0.5)
         end
         
-        -- Smart delay based on mode (from scriptcontoh.lua)
+        -- Smart delay based on mode
         local baseDelay = Config.autoRecastDelay
         local delay = baseDelay
         
-        -- Mode-specific delays
-        if Config.mode == "secure" then
-            delay = 0.6 + math.random()*0.4 -- Variable delay for secure mode
-        elseif Config.mode == "fast" then
-            delay = 0.05 + math.random()*0.02 -- Ultra fast delay (50-70ms)
-        elseif Config.mode == "gameautomimic" then
+        if Config.mode == "gameautomimic" then
             delay = 8.0 + math.random()*3.0 -- Longer delay for visual experience (8-11s)
         else
-            -- Smart mode with animation-based timing
-            local smartDelay = baseDelay + GetRealisticTiming("waiting") * 0.3
-            delay = smartDelay + (math.random()*0.2 - 0.1)
+            delay = 2.0 + math.random()*1.0 -- Standard delay for other modes
         end
         
         if delay < 0.15 then delay = 0.15 end -- Minimum delay
@@ -974,7 +710,7 @@ _G.AutoFishV3 = {
     end,
     
     SetMode = function(mode)
-        if mode and (mode == "smart" or mode == "secure" or mode == "auto") then
+        if mode and (mode == "smart" or mode == "secure" or mode == "auto" or mode == "gameautomimic") then
             Config.mode = mode
             Status.fishingMode = mode
         end
