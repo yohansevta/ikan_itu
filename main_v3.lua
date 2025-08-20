@@ -124,7 +124,7 @@ local FishingSection = FishingTab:CreateSection("🎣 AI Fishing Control")
 -- Mode Selection
 local ModeDropdown = FishingTab:CreateDropdown({
     Name = "🧠 Fishing Mode",
-    Options = {"Smart AI", "Secure Mode", "Fast Mode", "Game Auto", "Auto Loop"},
+    Options = {"Smart AI", "Secure Mode", "Fast Mode", "Game Auto", "Enhanced Auto", "Auto Loop"},
     CurrentOption = "Smart AI",
     Flag = "FishingMode",
     Callback = function(option)
@@ -133,6 +133,7 @@ local ModeDropdown = FishingTab:CreateDropdown({
             ["Secure Mode"] = "secure",
             ["Fast Mode"] = "fast",
             ["Game Auto"] = "gameauto",
+            ["Enhanced Auto"] = "enhanced",
             ["Auto Loop"] = "auto"
         }
         Config.mode = modes[option] or "smart"
@@ -180,6 +181,11 @@ local StopButton = FishingTab:CreateButton({
             end)
             gameAutoEnabled = false
             print("[Game Auto] Built-in auto fishing disabled")
+        end
+        
+        -- Disable enhanced game auto if it was enabled
+        if Config.mode == "enhanced" then
+            DisableEnhancedGameAuto()
         end
         
         Config.enabled = false
@@ -283,6 +289,15 @@ local GameAutoSection = FishingTab:CreateSection("🎮 Game Auto Mode")
 local GameAutoInfo = FishingTab:CreateLabel("🎮 Game Auto: Uses built-in game auto fishing (includes minigame)")
 
 local GameAutoNote = FishingTab:CreateLabel("✅ Complete fishing cycle with animations and minigame timing")
+
+-- Enhanced Auto Section
+local EnhancedAutoSection = FishingTab:CreateSection("🚀 Enhanced Auto Mode")
+
+local EnhancedAutoInfo = FishingTab:CreateLabel("🚀 Enhanced Auto: Game auto + instant minigame completion")
+
+local EnhancedAutoNote = FishingTab:CreateLabel("✅ Game handles casting, script handles instant minigame")
+
+local EnhancedAutoWarning = FishingTab:CreateLabel("⚠️ Experimental: May conflict with some game states")
 
 -- ===================================================================
 -- ROD ORIENTATION FIX SYSTEM
@@ -634,6 +649,62 @@ local function DoGameAutoCycle()
     return true
 end
 
+-- Enhanced Game Auto Mode with Instant Minigame
+local enhancedGameAutoEnabled = false
+local minigameDetectionActive = false
+
+local function DoEnhancedGameAutoCycle()
+    -- Enable game's built-in auto fishing
+    if not enhancedGameAutoEnabled then
+        if gameAutoRemote then
+            local success = pcall(function()
+                gameAutoRemote:InvokeServer(true) -- Enable game's auto fishing
+            end)
+            if success then
+                enhancedGameAutoEnabled = true
+                minigameDetectionActive = true
+                print("[Enhanced Game Auto] Built-in auto fishing enabled with minigame enhancement")
+                Notify("Enhanced Auto", "🚀 Enhanced Game Auto activated!")
+                
+                -- Start minigame detection
+                spawn(function()
+                    while minigameDetectionActive and Config.fishingEnabled do
+                        -- Monitor for minigame and instant complete it
+                        if finishRemote then
+                            pcall(function()
+                                finishRemote:FireServer() -- Instant minigame completion
+                            end)
+                        end
+                        wait(0.1) -- Check every 100ms for responsiveness
+                    end
+                end)
+            else
+                print("[Enhanced Game Auto] Failed to enable built-in auto fishing")
+                return false
+            end
+        else
+            print("[Enhanced Game Auto] UpdateAutoFishingState remote not found")
+            return false
+        end
+    end
+    
+    -- Game handles everything, we just enhance minigame
+    Status.fishCaught = Status.fishCaught + 1
+    print("[Enhanced Game Auto] Game auto + instant minigame active...")
+    return true
+end
+
+local function DisableEnhancedGameAuto()
+    if enhancedGameAutoEnabled and gameAutoRemote then
+        pcall(function()
+            gameAutoRemote:InvokeServer(false) -- Disable game's auto fishing
+        end)
+        enhancedGameAutoEnabled = false
+        minigameDetectionActive = false
+        print("[Enhanced Game Auto] Built-in auto fishing disabled")
+    end
+end
+
 -- Auto Mode Runner (Direct FishingCompleted spam)
 function AutoModeRunner(mySessionId)
     Notify("Auto Mode", "🔥 Auto Mode started! Spamming FishingCompleted...")
@@ -681,6 +752,14 @@ function AutofishRunner(mySessionId)
                     Config.mode = "smart"
                     Status.fishingMode = "Smart AI"
                     Notify("Game Auto", "⚠️ Fallback to Smart AI mode")
+                end
+            elseif Config.mode == "enhanced" then
+                local success = DoEnhancedGameAutoCycle()
+                if not success then
+                    -- Fallback to smart mode if enhanced auto fails
+                    Config.mode = "smart"
+                    Status.fishingMode = "Smart AI"
+                    Notify("Enhanced Auto", "⚠️ Fallback to Smart AI mode")
                     DoSmartCycle()
                 end
             else 
@@ -704,6 +783,8 @@ function AutofishRunner(mySessionId)
             delay = 0.05 + math.random()*0.02 -- Ultra fast delay (50-70ms)
         elseif Config.mode == "gameauto" then
             delay = 3.0 + math.random()*2.0 -- Longer delay, let game handle timing (3-5s)
+        elseif Config.mode == "enhanced" then
+            delay = 2.0 + math.random()*1.0 -- Enhanced auto delay (2-3s)
         else
             -- Smart mode with animation-based timing
             local smartDelay = baseDelay + GetRealisticTiming("waiting") * 0.3
