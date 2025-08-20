@@ -124,7 +124,7 @@ local FishingSection = FishingTab:CreateSection("🎣 AI Fishing Control")
 -- Mode Selection
 local ModeDropdown = FishingTab:CreateDropdown({
     Name = "🧠 Fishing Mode",
-    Options = {"Smart AI", "Secure Mode", "Fast Mode", "Auto Loop"},
+    Options = {"Smart AI", "Secure Mode", "Fast Mode", "Game Auto Mimic", "Auto Loop"},
     CurrentOption = "Smart AI",
     Flag = "FishingMode",
     Callback = function(option)
@@ -132,6 +132,7 @@ local ModeDropdown = FishingTab:CreateDropdown({
             ["Smart AI"] = "smart",
             ["Secure Mode"] = "secure",
             ["Fast Mode"] = "fast",
+            ["Game Auto Mimic"] = "gameautomimic",
             ["Auto Loop"] = "auto"
         }
         Config.mode = modes[option] or "smart"
@@ -170,6 +171,12 @@ local StopButton = FishingTab:CreateButton({
         if not Config.enabled then
             Notify("Fishing AI", "Not running!")
             return
+        end
+        
+        -- Stop GameAutoMimic if it was running
+        if Config.mode == "gameautomimic" and GameAutoMimicModule then
+            GameAutoMimicModule.Stop()
+            print("[GameAutoMimic] Stopped via main stop button")
         end
         
         Config.enabled = false
@@ -266,6 +273,15 @@ local AutoModeStop = FishingTab:CreateButton({
         Notify("Auto Loop", "🛑 Auto Loop stopped!")
     end
 })
+
+-- Game Auto Mimic Section
+local GameAutoMimicSection = FishingTab:CreateSection("🎮 Game Auto Mimic Mode")
+
+local GameAutoMimicInfo = FishingTab:CreateLabel("🎮 Game Auto Mimic: Meniru step FishingController bawaan game")
+
+local GameAutoMimicNote = FishingTab:CreateLabel("✅ RequestChargeFishingRod → RequestMinigameClick → FishCaught")
+
+local GameAutoMimicSafety = FishingTab:CreateLabel("🛡️ Built-in: OnCooldown() • NoInventorySpace() • GUID tracking")
 
 -- ===================================================================
 -- ROD ORIENTATION FIX SYSTEM
@@ -585,6 +601,46 @@ local function DoFastCycle()
     print("[Fast Mode] Completed! Total fish:", Status.fishCaught)
 end
 
+-- Game Auto Mimic Cycle (Meniru FishingController steps)
+local GameAutoMimicModule = nil
+
+local function LoadGameAutoMimic()
+    if GameAutoMimicModule then return GameAutoMimicModule end
+    
+    -- Try to load GameAutoMimic module
+    local success, module = pcall(function()
+        return loadstring(game:HttpGet('https://raw.githubusercontent.com/yohansevta/ikan_itu/refs/heads/main/modules/core/game_auto_mimic.lua'))()
+    end)
+    
+    if success and module then
+        GameAutoMimicModule = module
+        print("[GameAutoMimic] Module loaded successfully")
+        return GameAutoMimicModule
+    else
+        warn("[GameAutoMimic] Failed to load module:", module)
+        return nil
+    end
+end
+
+local function DoGameAutoMimicCycle()
+    local mimic = LoadGameAutoMimic()
+    if not mimic then
+        print("[GameAutoMimic] Module not available, fallback to Smart mode")
+        DoSmartCycle()
+        return
+    end
+    
+    -- Use GameAutoMimic's built-in cycle management
+    if not mimic.GetStatus().isRunning then
+        print("[GameAutoMimic] Starting mimic session...")
+        mimic.Start()
+    end
+    
+    -- GameAutoMimic handles its own loop, we just monitor
+    Status.fishCaught = Status.fishCaught + 1
+    print("[GameAutoMimic] Cycle delegated to module")
+end
+
 -- Auto Mode Runner (Direct FishingCompleted spam)
 function AutoModeRunner(mySessionId)
     Notify("Auto Mode", "🔥 Auto Mode started! Spamming FishingCompleted...")
@@ -625,6 +681,8 @@ function AutofishRunner(mySessionId)
                 DoSecureCycle()
             elseif Config.mode == "fast" then
                 DoFastCycle()
+            elseif Config.mode == "gameautomimic" then
+                DoGameAutoMimicCycle()
             else 
                 DoSmartCycle() -- Default to smart mode
             end
@@ -644,6 +702,8 @@ function AutofishRunner(mySessionId)
             delay = 0.6 + math.random()*0.4 -- Variable delay for secure mode
         elseif Config.mode == "fast" then
             delay = 0.05 + math.random()*0.02 -- Ultra fast delay (50-70ms)
+        elseif Config.mode == "gameautomimic" then
+            delay = 5.0 + math.random()*2.0 -- Longer delay, let GameAutoMimic handle timing (5-7s)
         else
             -- Smart mode with animation-based timing
             local smartDelay = baseDelay + GetRealisticTiming("waiting") * 0.3
