@@ -124,13 +124,14 @@ local FishingSection = FishingTab:CreateSection("🎣 AI Fishing Control")
 -- Mode Selection
 local ModeDropdown = FishingTab:CreateDropdown({
     Name = "🧠 Fishing Mode",
-    Options = {"Smart AI", "Secure Mode", "Auto Loop"},
+    Options = {"Smart AI", "Secure Mode", "Fast Mode", "Auto Loop"},
     CurrentOption = "Smart AI",
     Flag = "FishingMode",
     Callback = function(option)
         local modes = {
             ["Smart AI"] = "smart",
-            ["Secure Mode"] = "secure", 
+            ["Secure Mode"] = "secure",
+            ["Fast Mode"] = "fast",
             ["Auto Loop"] = "auto"
         }
         Config.mode = modes[option] or "smart"
@@ -538,6 +539,53 @@ local function DoSecureCycle()
     print("[Secure Mode] Completed! Total fish:", Status.fishCaught)
 end
 
+-- Fast Fishing Cycle (Based on autoFishingExtreme from autosistem.lua)
+local function DoFastCycle()
+    -- Minimal safety check for fast mode
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    if humanoid and humanoid.Health < 10 then
+        print("[Fast Mode] Low health detected, pausing...")
+        task.wait(2)
+        return
+    end
+    
+    -- Ultra fast delays
+    local extremeDelay = 0.05 -- Base extreme delay
+    
+    -- Fast equip check
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    local equippedTool = char:FindFirstChildOfClass("Tool")
+    if not equippedTool then
+        if equipRemote then
+            pcall(function() equipRemote:FireServer(1) end)
+            task.wait(extremeDelay)
+        end
+    end
+    
+    -- Rapid fire fishing sequence
+    -- Fast charge
+    if rodRemote then
+        pcall(function() rodRemote:InvokeServer(GetServerTime()) end)
+    end
+    task.wait(extremeDelay)
+    
+    -- Fast minigame
+    if miniGameRemote then
+        pcall(function() miniGameRemote:InvokeServer(-1.238, 0.969) end) -- Use perfect values for speed
+    end
+    task.wait(extremeDelay)
+    
+    -- Fast complete
+    if finishRemote then
+        pcall(function() finishRemote:FireServer() end)
+    end
+    
+    Status.fishCaught = Status.fishCaught + 1
+    print("[Fast Mode] Completed! Total fish:", Status.fishCaught)
+end
+
 -- Auto Mode Runner (Direct FishingCompleted spam)
 function AutoModeRunner(mySessionId)
     Notify("Auto Mode", "🔥 Auto Mode started! Spamming FishingCompleted...")
@@ -575,7 +623,9 @@ function AutofishRunner(mySessionId)
             FixRodOrientation()
             
             if Config.mode == "secure" then 
-                DoSecureCycle() 
+                DoSecureCycle()
+            elseif Config.mode == "fast" then
+                DoFastCycle()
             else 
                 DoSmartCycle() -- Default to smart mode
             end
@@ -593,6 +643,8 @@ function AutofishRunner(mySessionId)
         -- Mode-specific delays
         if Config.mode == "secure" then
             delay = 0.6 + math.random()*0.4 -- Variable delay for secure mode
+        elseif Config.mode == "fast" then
+            delay = 0.05 + math.random()*0.02 -- Ultra fast delay (50-70ms)
         else
             -- Smart mode with animation-based timing
             local smartDelay = baseDelay + GetRealisticTiming("waiting") * 0.3

@@ -3,6 +3,7 @@
 
 local Utils = require(script.Parent.Parent.core.utils)
 local Config = require(script.Parent.Parent.core.config)
+local Fishing = require(script.Parent.Parent.core.fishing)
 
 local FishingAI = {}
 
@@ -157,6 +158,9 @@ end
 
 function FishingAI.CreateAdvancedSettings(tab)
     local AdvancedSection = tab:CreateSection("⚙️ Advanced Fishing Settings")
+    
+    -- Fast Mode Warning
+    local FastModeWarning = tab:CreateLabel("⚠️ Fast Mode: Ultra-fast fishing with minimal delays - High detection risk!")
     
     -- Recast Delay Slider
     local RecastSlider = tab:CreateSlider({
@@ -353,10 +357,10 @@ function FishingAI.AutofishRunner(mySessionId)
     
     while Config.Fishing.enabled and sessionId == mySessionId do
         local success = pcall(function()
-            -- This is a placeholder - will be replaced with actual fishing logic
-            print("[Fishing AI] Running " .. Config.Fishing.mode .. " cycle...")
+            -- Run fishing cycle using the core fishing module
+            Fishing.RunCycle(Config.Fishing.mode, Config.Fishing.safeModeChance)
             
-            -- Simulate fishing
+            -- Update statistics
             Status.fishCaught = Status.fishCaught + 1
             
             -- Random chance for rare fish
@@ -372,8 +376,10 @@ function FishingAI.AutofishRunner(mySessionId)
             Utils.Notify("Fishing AI", "❌ Error in fishing cycle")
         end
         
-        -- Wait with human-like variation
-        local delay = Config.Fishing.autoRecastDelay
+        -- Get appropriate delay for the current mode
+        local delay = Fishing.GetModeDelay(Config.Fishing.mode, Config.Fishing.autoRecastDelay)
+        
+        -- Add human-like variation if enabled
         if Config.HumanBehaviorEnabled then
             delay = Utils.HumanDelay(delay, 0.3)
         end
