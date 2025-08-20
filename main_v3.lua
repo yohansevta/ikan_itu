@@ -20,7 +20,7 @@ if not LocalPlayer then
     return
 end
 
--- Simple
+-- Simple notification system
 local function Notify(title, text, duration)
     duration = duration or 4
     pcall(function()
@@ -284,6 +284,18 @@ local GameAutoMimicNote = FishingTab:CreateLabel("✅ RequestChargeFishingRod �
 
 local GameAutoMimicSafety = FishingTab:CreateLabel("🛡️ Built-in: OnCooldown() • NoInventorySpace() • GUID tracking")
 
+-- ===================================================================
+-- ROD ORIENTATION FIX SYSTEM
+-- ===================================================================
+
+-- Rod Orientation Fix
+local RodFix = {
+    enabled = true,
+    lastFixTime = 0,
+    isCharging = false,
+    chargingConnection = nil
+}
+
 -- Rod Orientation Fix Toggle
 local RodFixToggle = FishingTab:CreateToggle({
     Name = "🔧 Rod Orientation Fix",
@@ -298,18 +310,6 @@ local RodFixToggle = FishingTab:CreateToggle({
         end
     end
 })
-
--- ===================================================================
--- ROD ORIENTATION FIX SYSTEM
--- ===================================================================
-
--- Rod Orientation Fix
-local RodFix = {
-    enabled = true,
-    lastFixTime = 0,
-    isCharging = false,
-    chargingConnection = nil
-}
 
 -- Enhanced Rod Orientation Fix with multiple methods
 local function FixRodOrientation()
