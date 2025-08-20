@@ -53,7 +53,7 @@ function FishingAI.CreateMainControls(tab)
     -- Mode Selection Dropdown
     local ModeDropdown = tab:CreateDropdown({
         Name = "🧠 Fishing AI Mode",
-        Options = {"Smart AI", "Secure Mode", "Fast Mode"},
+        Options = {"Smart AI", "Secure Mode", "Fast Mode", "Game Auto"},
         CurrentOption = {"Smart AI"},
         MultipleOptions = false,
         Flag = "FishingMode",
@@ -61,7 +61,8 @@ function FishingAI.CreateMainControls(tab)
             local modes = {
                 ["Smart AI"] = "smart",
                 ["Secure Mode"] = "secure",
-                ["Fast Mode"] = "fast"
+                ["Fast Mode"] = "fast",
+                ["Game Auto"] = "gameauto"
             }
             Config.Fishing.mode = modes[option[1]] or "smart"
             Status.fishingMode = option[1]
@@ -159,7 +160,8 @@ end
 function FishingAI.CreateAdvancedSettings(tab)
     local AdvancedSection = tab:CreateSection("⚙️ Advanced Fishing Settings")
     
-    -- Fast Mode Warning
+    -- Mode Information
+    local ModeInfo = tab:CreateLabel("🎮 Game Auto: Uses built-in game auto fishing (includes minigame)")
     local FastModeWarning = tab:CreateLabel("⚠️ Fast Mode: Ultra-fast fishing with minimal delays - High detection risk!")
     
     -- Recast Delay Slider
@@ -292,6 +294,11 @@ function FishingAI.StopFishing()
     if not Config.Fishing.enabled then
         Utils.Notify("Fishing AI", "⚠️ Not running!")
         return
+    end
+    
+    -- Disable game auto fishing if it was enabled
+    if Config.Fishing.mode == "gameauto" then
+        Fishing.DisableGameAuto()
     end
     
     Config.Fishing.enabled = false

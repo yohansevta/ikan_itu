@@ -41,6 +41,7 @@ local rodRemote = ResolveRemote("RF/ChargeFishingRod")
 local miniGameRemote = ResolveRemote("RF/RequestFishingMinigameStarted")
 local finishRemote = ResolveRemote("RE/FishingCompleted")
 local equipRemote = ResolveRemote("RE/EquipToolFromHotbar")
+local gameAutoRemote = ResolveRemote("RF/UpdateAutoFishingState") -- Game's built-in auto fishing
 
 -- ===================================================================
 -- UTILITY FUNCTIONS
@@ -226,6 +227,46 @@ function Fishing.DoAutoLoop()
     end
 end
 
+-- Game Auto Fishing Cycle (Uses built-in game auto fishing)
+local gameAutoEnabled = false
+
+function Fishing.DoGameAutoCycle()
+    -- Use game's built-in auto fishing system
+    if not gameAutoEnabled then
+        if gameAutoRemote then
+            local success = pcall(function()
+                gameAutoRemote:InvokeServer(true) -- Enable game's auto fishing
+            end)
+            if success then
+                gameAutoEnabled = true
+                print("[Game Auto] Built-in auto fishing enabled")
+                return true
+            else
+                print("[Game Auto] Failed to enable built-in auto fishing")
+                return false
+            end
+        else
+            print("[Game Auto] UpdateAutoFishingState remote not found")
+            return false
+        end
+    end
+    
+    -- Let the game handle auto fishing, we just monitor
+    print("[Game Auto] Game is handling auto fishing...")
+    return true
+end
+
+-- Disable game auto fishing
+function Fishing.DisableGameAuto()
+    if gameAutoEnabled and gameAutoRemote then
+        pcall(function()
+            gameAutoRemote:InvokeServer(false) -- Disable game's auto fishing
+        end)
+        gameAutoEnabled = false
+        print("[Game Auto] Built-in auto fishing disabled")
+    end
+end
+
 -- ===================================================================
 -- FISHING RUNNER
 -- ===================================================================
@@ -243,6 +284,13 @@ function Fishing.RunCycle(mode, safeModeChance)
         Fishing.DoSecureCycle()
     elseif mode == "fast" then
         Fishing.DoFastCycle()
+    elseif mode == "gameauto" then
+        local success = Fishing.DoGameAutoCycle()
+        if not success then
+            -- Fallback to smart mode if game auto fails
+            print("[Game Auto] Fallback to Smart mode")
+            Fishing.DoSmartCycle()
+        end
     elseif mode == "auto" then
         Fishing.DoAutoLoop()
     else
@@ -259,6 +307,8 @@ function Fishing.GetModeDelay(mode, baseDelay)
         return 0.6 + math.random() * 0.4 -- Variable delay for secure mode
     elseif mode == "fast" then
         return 0.05 + math.random() * 0.02 -- Ultra fast delay (50-70ms)
+    elseif mode == "gameauto" then
+        return 3.0 + math.random() * 2.0 -- Longer delay, let game handle timing (3-5s)
     elseif mode == "auto" then
         return 0.5 -- Auto mode standard delay
     else
