@@ -17,10 +17,28 @@ end
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
     warn("modern_autofish: LocalPlayer missing. Run as LocalScript while in Play mode.")
-    return
-end
-
--- Simple notification system
+    retur    -- Wait for minigame to be visible
+    task.wait(1.5 + math.random() * 0.5) -- Extended time to see minigame
+    
+    -- Step 4: SendFishingRequestToServer (optional validation)
+    -- This step might be used for server-side validation in real game auto
+    print("[GameAutoMimic] SendFishingRequestToServer (simulated)")
+    
+    -- Extended waiting time to see the full fishing process
+    local waitTime = 2.5 + math.random() * 1.0 -- 2.5-3.5 seconds
+    print(string.format("[GameAutoMimic] Waiting for fish... (%.1fs)", waitTime))
+    task.wait(waitTime)
+    
+    -- Step 5: FishCaught (completion)
+    print("[GameAutoMimic] Completing fishing...")
+    if finishRemote then
+        local ok = pcall(function() finishRemote:FireServer() end)
+        if not ok then
+            print("[GameAutoMimic] FishCaught failed")
+            return
+        end
+        print("[GameAutoMimic] Fish caught! 🐟")
+    endnotification system
 local function Notify(title, text, duration)
     duration = duration or 4
     pcall(function()
@@ -641,18 +659,23 @@ local function DoGameAutoMimicCycle()
         return
     end
     
-    -- Step 1: Equip rod if needed
+    -- Step 1: Equip rod if needed (with proper timing for animation)
     local character = LocalPlayer.Character
     if character and not character:FindFirstChildOfClass("Tool") then
         if equipRemote then
+            print("[GameAutoMimic] Equipping fishing rod...")
             pcall(function() equipRemote:FireServer(1) end)
-            task.wait(0.2)
+            task.wait(1.0) -- Give time for equip animation
         end
     end
     
-    -- Step 2: RequestChargeFishingRod (mimicking FishingController)
+    -- Step 2: RequestChargeFishingRod (with visible charging animation)
+    print("[GameAutoMimic] Starting rod charge... (you should see charging animation)")
     local usePerfect = math.random(1, 100) <= 85 -- 85% perfect chance
     local timestamp = usePerfect and GetServerTime() or (GetServerTime() + math.random() * 0.5)
+    
+    -- Fix rod orientation for better visual
+    FixRodOrientation()
     
     if rodRemote then
         local ok = pcall(function() rodRemote:InvokeServer(timestamp) end)
@@ -660,12 +683,20 @@ local function DoGameAutoMimicCycle()
             print("[GameAutoMimic] RequestChargeFishingRod failed")
             return
         end
-        print("[GameAutoMimic] RequestChargeFishingRod success")
+        print("[GameAutoMimic] Rod charging... (watch the charging bar!)")
     end
     
-    task.wait(0.8 + math.random() * 0.3) -- Humanized charge delay
+    -- Extended charge time to see animation clearly
+    local chargeTime = 2.0 + math.random() * 1.0 -- 2-3 seconds for visible charging
+    local chargeStart = tick()
+    while tick() - chargeStart < chargeTime do
+        FixRodOrientation() -- Keep fixing during charge
+        task.wait(0.1)
+    end
+    print("[GameAutoMimic] Charge complete!")
     
-    -- Step 3: RequestFishingMinigameClick (mimicking FishingController)
+    -- Step 3: RequestFishingMinigameClick (with visible minigame)
+    print("[GameAutoMimic] Starting minigame... (you should see the circle minigame)")
     local x = usePerfect and -1.238 or (math.random(-1000, 1000) / 1000)
     local y = usePerfect and 0.969 or (math.random(0, 1000) / 1000)
     
@@ -675,10 +706,11 @@ local function DoGameAutoMimicCycle()
             print("[GameAutoMimic] RequestFishingMinigameClick failed")
             return
         end
-        print("[GameAutoMimic] RequestFishingMinigameClick success")
+        print("[GameAutoMimic] Minigame triggered! Perfect cast: " .. (usePerfect and "YES" or "NO"))
     end
     
-    task.wait(0.5 + math.random() * 0.2) -- Humanized minigame delay
+    -- Wait for minigame to be visible
+    task.wait(1.5 + math.random() * 0.5) -- Extended time to see minigame
     
     -- Step 4: SendFishingRequestToServer (optional validation)
     -- This step might be used for server-side validation in real game auto
@@ -767,7 +799,7 @@ function AutofishRunner(mySessionId)
         elseif Config.mode == "fast" then
             delay = 0.05 + math.random()*0.02 -- Ultra fast delay (50-70ms)
         elseif Config.mode == "gameautomimic" then
-            delay = 5.0 + math.random()*2.0 -- Longer delay, let GameAutoMimic handle timing (5-7s)
+            delay = 8.0 + math.random()*3.0 -- Longer delay for visual experience (8-11s)
         else
             -- Smart mode with animation-based timing
             local smartDelay = baseDelay + GetRealisticTiming("waiting") * 0.3
