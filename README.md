@@ -8,31 +8,33 @@ Advanced Fishing Automation Suite for Roblox with Rayfield UI
 
 ## 🚀 Quick Start
 
+# 🐳 AutoFish V3 - Rayfield UI Edition
+
+**Advanced auto-fishing script for Roblox with beautiful purple dark theme**
+
+## 🚀 Quick Start
+
 ```lua
-loadstring(game:HttpGet('https://raw.githubusercontent.com/yohansevta/ikan_itu/main/main_new.lua'))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/yohansevta/ikan_itu/refs/heads/main/main_v3.lua"))()
 ```
 
-## ✨ Features
+## 📋 Current Features (V3)
 
-### 🤖 AI Fishing System
-- **Smart AI Mode** - Intelligent fishing with human-like behavior
-- **Secure Mode** - Extra safe fishing with randomization
-- **Auto Loop** - Continuous fishing automation
+### 🤖 **Fishing AI Tab**
+- ✅ **Smart AI Mode** - Intelligent fishing with pattern detection
+- ✅ **Secure Mode** - Safe fishing with random delays
+- ✅ **Auto Loop Mode** - Continuous automated fishing
+- ✅ **Recast Delay Control** - Adjustable timing (0.1-2.0s)
+- ✅ **Safe Mode Chance** - Risk management (0-100%)
+- ✅ **Anti-AFK Protection** - Automatic movement to prevent kick
+- ✅ **Auto Mode** - Advanced continuous loop
+- ✅ **Real-time Status** - Live fishing statistics
 
-### 🎨 Modern UI
-- **Rayfield UI** - Clean and modern interface
-- **Purple Dark Theme** - Elegant dark purple theme with transparency
-- **Real-time Status** - Live fishing statistics and progress
-
-### 🛡️ Security Features
-- **Anti-AFK Protection** - Automatic movement to prevent AFK kick
-- **Human-like Behavior** - Randomized delays and actions
-- **Safe Mode** - Built-in detection avoidance
-
-### ⚙️ Advanced Settings
-- **Customizable Delays** - Adjust recast timing (0.1-2.0s)
-- **Safe Mode Chance** - Configure safety percentage (0-100%)
-- **Auto Mode** - Advanced continuous loop system
+### 🎨 **UI Features**
+- ✅ **Purple Dark Theme** - Beautiful Amethyst theme
+- ✅ **Transparent Design** - Modern glass-like appearance
+- ✅ **Responsive Interface** - Works on all screen sizes
+- ✅ **Configuration Saving** - Settings persist between sessions
 
 ## 📊 Status Tracking
 
@@ -50,17 +52,17 @@ The script includes comprehensive configuration options:
 - **Safety Features**: Anti-detection mechanisms
 - **UI Theme**: Purple dark with transparency
 
-## 📁 Repository Structure
+## �️ Repository Structure
 
 ```
-ikan_itu/
-├── main_new.lua          # Main script (Rayfield UI)
-├── main_v2.lua           # Alternative main script
-├── source.lua            # Rayfield UI loader
-├── modules/              # Modular components
-│   ├── core/            # Core utilities
-│   └── ui/              # UI components
-└── README.md            # This file
+📁 ikan_itu/
+├── 📄 main_v3.lua          # 🔥 Main script (CURRENT VERSION)
+├── 📄 source_simple.lua    # 🔧 Fallback Rayfield loader
+├── 📁 modules/             # 📦 Modular components (future use)
+│   ├── 📁 core/           # Core utilities and config
+│   └── 📁 ui/             # UI component modules
+├── 📄 README.md           # 📖 Main documentation
+└── 📄 README_V2.md        # 📚 Development history
 ```
 
 ## 🎯 Planned Features
