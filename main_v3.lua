@@ -365,6 +365,10 @@ end
 -- CORE FISHING FUNCTIONS (From working scriptcontoh.lua)
 -- ===================================================================
 
+-- ===================================================================
+-- CORE FISHING FUNCTIONS (From working scriptcontoh.lua)
+-- ===================================================================
+
 -- Remote helper (best-effort)
 local function FindNet()
     local ok, net = pcall(function()
@@ -407,17 +411,43 @@ local function GetServerTime()
     return tick()
 end
 
--- Smart Fishing Cycle (Working implementation)
+-- Realistic timing function from scriptcontoh.lua
+local function GetRealisticTiming(phase)
+    local timings = {
+        charging = {min = 0.8, max = 1.5},    -- Rod charging time
+        casting = {min = 0.2, max = 0.4},     -- Cast animation
+        waiting = {min = 2.0, max = 4.0},     -- Wait for fish
+        reeling = {min = 1.0, max = 2.5},     -- Reel animation
+        holding = {min = 0.5, max = 1.0}      -- Hold fish animation
+    }
+    
+    local timing = timings[phase] or {min = 0.5, max = 1.0}
+    return timing.min + math.random() * (timing.max - timing.min)
+end
+
+-- Animation Monitor (simplified)
+local AnimationMonitor = {
+    isMonitoring = false,
+    currentState = "idle",
+    fishingSuccess = false
+}
+
+-- Smart Fishing Cycle (Exact copy from scriptcontoh.lua)
 local function DoSmartCycle()
-    -- Phase 1: Equip and fix rod orientation
+    AnimationMonitor.fishingSuccess = false
+    AnimationMonitor.currentState = "starting"
+    
+    -- Phase 1: Equip and prepare
     FixRodOrientation() -- Fix rod orientation at start
     if equipRemote then 
         pcall(function() equipRemote:FireServer(1) end)
-        task.wait(0.1)
+        task.wait(GetRealisticTiming("charging"))
     end
     
-    -- Phase 2: Charge rod with perfect timing
+    -- Phase 2: Charge rod (with animation-aware timing)
+    AnimationMonitor.currentState = "charging"
     FixRodOrientation() -- Fix during charging phase (critical!)
+    
     local usePerfect = math.random(1,100) <= Config.safeModeChance
     local timestamp = usePerfect and GetServerTime() or GetServerTime() + math.random()*0.5
     
@@ -425,16 +455,18 @@ local function DoSmartCycle()
         pcall(function() rodRemote:InvokeServer(timestamp) end)
     end
     
-    -- Keep fixing orientation during charging
+    -- Fix orientation continuously during charging
     local chargeStart = tick()
-    local chargeDuration = 0.8 + math.random()*0.4
+    local chargeDuration = GetRealisticTiming("charging")
     while tick() - chargeStart < chargeDuration do
         FixRodOrientation() -- Keep fixing during charge animation
-        task.wait(0.02) -- Frequent fixes during charging
+        task.wait(0.02) -- Very frequent fixes during charging
     end
     
-    -- Phase 3: Mini-game (accurate values for success)
+    -- Phase 3: Cast (mini-game simulation)
+    AnimationMonitor.currentState = "casting"
     FixRodOrientation() -- Fix before casting
+    
     local x = usePerfect and -1.238 or (math.random(-1000,1000)/1000)
     local y = usePerfect and 0.969 or (math.random(0,1000)/1000)
     
@@ -442,56 +474,68 @@ local function DoSmartCycle()
         pcall(function() miniGameRemote:InvokeServer(x,y) end)
     end
     
-    task.wait(1.2 + math.random()*0.6) -- Wait for fish
+    -- Wait for cast animation
+    task.wait(GetRealisticTiming("casting"))
     
-    -- Phase 4: Complete fishing
+    -- Phase 4: Wait for fish (realistic waiting time)
+    AnimationMonitor.currentState = "waiting"
+    task.wait(GetRealisticTiming("waiting"))
+    
+    -- Phase 5: Complete fishing
+    AnimationMonitor.currentState = "completing"
     FixRodOrientation() -- Fix before completion
+    
     if finishRemote then 
         pcall(function() finishRemote:FireServer() end)
     end
     
-    -- Update stats
+    -- Wait for completion and fish catch animations
+    task.wait(GetRealisticTiming("reeling"))
+    
+    AnimationMonitor.currentState = "idle"
     Status.fishCaught = Status.fishCaught + 1
-    print("[Smart Mode] Fish caught! Total:", Status.fishCaught)
+    print("[Smart Cycle] Completed! Total fish:", Status.fishCaught)
 end
 
--- Secure Fishing Cycle 
+-- Secure Fishing Cycle (From scriptcontoh.lua)
 local function DoSecureCycle()
     -- Equip rod first
     if equipRemote then 
-        pcall(function() equipRemote:FireServer(1) end)
-        task.wait(0.1)
+        local ok = pcall(function() equipRemote:FireServer(1) end)
+        if not ok then print("[Secure Mode] Failed to equip") end
     end
     
-    -- Secure mode: random between perfect and normal cast
+    -- Safe mode logic: random between perfect and normal cast
     local usePerfect = math.random(1,100) <= Config.safeModeChance
     
     -- Charge rod with proper timing
     local timestamp = usePerfect and 9999999999 or (tick() + math.random())
     if rodRemote then
-        pcall(function() rodRemote:InvokeServer(timestamp) end)
+        local ok = pcall(function() rodRemote:InvokeServer(timestamp) end)
+        if not ok then print("[Secure Mode] Failed to charge") end
     end
     
-    task.wait(0.1 + math.random()*0.1) -- Variable charge wait
+    task.wait(0.1) -- Standard charge wait
     
-    -- Mini-game with secure values
+    -- Minigame with safe mode values
     local x = usePerfect and -1.238 or (math.random(-1000,1000)/1000)
     local y = usePerfect and 0.969 or (math.random(0,1000)/1000)
     
     if miniGameRemote then
-        pcall(function() miniGameRemote:InvokeServer(x, y) end)
+        local ok = pcall(function() miniGameRemote:InvokeServer(x, y) end)
+        if not ok then print("[Secure Mode] Failed minigame") end
     end
     
-    task.wait(1.3 + math.random()*0.4) -- Variable fishing wait
+    task.wait(1.3) -- Standard fishing wait
     
     -- Complete fishing
     if finishRemote then 
-        pcall(function() finishRemote:FireServer() end)
+        local ok = pcall(function() finishRemote:FireServer() end)
+        if not ok then print("[Secure Mode] Failed to finish") end
     end
     
-    -- Update stats
     Status.fishCaught = Status.fishCaught + 1
-    print("[Secure Mode] Fish caught! Total:", Status.fishCaught)
+    print("[Secure Mode] Completed! Total fish:", Status.fishCaught)
 end
 
 -- Auto Mode Runner (Direct FishingCompleted spam)
@@ -515,43 +559,59 @@ function AutoModeRunner(mySessionId)
     end
 end
 
--- Main Autofish Runner with real fishing logic
+-- Main Autofish Runner (Exact copy from scriptcontoh.lua)
 function AutofishRunner(mySessionId)
-    Notify("Fishing AI", "🤖 " .. Status.fishingMode .. " started")
+    -- Initialize session stats
+    Status.sessionTime = tick()
+    Status.fishCaught = 0
+    
+    -- Auto-fix rod orientation at start
+    FixRodOrientation()
+    
+    Notify("Fishing AI", "🤖 Smart AutoFishing started (mode: " .. Config.mode .. ")")
     while Config.enabled and sessionId == mySessionId do
         local ok, err = pcall(function()
+            -- Fix rod orientation before each cycle
+            FixRodOrientation()
+            
             if Config.mode == "secure" then 
                 DoSecureCycle() 
-            elseif Config.mode == "auto" then
-                -- Auto mode just spams finish
-                if finishRemote then
-                    finishRemote:FireServer()
-                    Status.fishCaught = Status.fishCaught + 1
-                end
             else 
-                DoSmartCycle() -- Default smart mode
+                DoSmartCycle() -- Default to smart mode
             end
-            UpdateStatusDisplay()
         end)
-        
         if not ok then
-            warn("Fishing cycle error:", err)
-            task.wait(1)
+            warn("modern_autofish: cycle error:", err)
+            Notify("Fishing AI", "Cycle error: " .. tostring(err))
+            task.wait(0.4 + math.random()*0.5)
         end
         
-        -- Dynamic delay based on mode
-        local delay = Config.autoRecastDelay
+        -- Smart delay based on mode (from scriptcontoh.lua)
+        local baseDelay = Config.autoRecastDelay
+        local delay = baseDelay
+        
+        -- Mode-specific delays
         if Config.mode == "secure" then
-            delay = delay + math.random()*0.3 -- Add randomness for secure mode
-        elseif Config.mode == "auto" then
-            delay = 0.3 -- Fast for auto mode
+            delay = 0.6 + math.random()*0.4 -- Variable delay for secure mode
+        else
+            -- Smart mode with animation-based timing
+            local smartDelay = baseDelay + GetRealisticTiming("waiting") * 0.3
+            delay = smartDelay + (math.random()*0.2 - 0.1)
         end
         
-        task.wait(delay)
+        if delay < 0.15 then delay = 0.15 end -- Minimum delay
+        
+        local elapsed = 0
+        while elapsed < delay do
+            if not Config.enabled or sessionId ~= mySessionId then break end
+            task.wait(0.05)
+            elapsed = elapsed + 0.05
+        end
+        
+        UpdateStatusDisplay()
     end
-    if sessionId == mySessionId then
-        Notify("Fishing AI", "🤖 Fishing AI stopped")
-    end
+    
+    Notify("Fishing AI", "🤖 Smart AutoFishing stopped")
 end
 
 -- Anti-AFK Functions
