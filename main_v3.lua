@@ -17,28 +17,10 @@ end
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
     warn("modern_autofish: LocalPlayer missing. Run as LocalScript while in Play mode.")
-    retur    -- Wait for minigame to be visible
-    task.wait(1.5 + math.random() * 0.5) -- Extended time to see minigame
-    
-    -- Step 4: SendFishingRequestToServer (optional validation)
-    -- This step might be used for server-side validation in real game auto
-    print("[GameAutoMimic] SendFishingRequestToServer (simulated)")
-    
-    -- Extended waiting time to see the full fishing process
-    local waitTime = 2.5 + math.random() * 1.0 -- 2.5-3.5 seconds
-    print(string.format("[GameAutoMimic] Waiting for fish... (%.1fs)", waitTime))
-    task.wait(waitTime)
-    
-    -- Step 5: FishCaught (completion)
-    print("[GameAutoMimic] Completing fishing...")
-    if finishRemote then
-        local ok = pcall(function() finishRemote:FireServer() end)
-        if not ok then
-            print("[GameAutoMimic] FishCaught failed")
-            return
-        end
-        print("[GameAutoMimic] Fish caught! 🐟")
-    endnotification system
+    return
+end
+
+-- Simple
 local function Notify(title, text, duration)
     duration = duration or 4
     pcall(function()
@@ -438,62 +420,6 @@ local function ForceEquipRod()
     end
     
     return false
-end
-
-local function FixRodOrientation()
-    if not RodFix.enabled then return end
-    
-    local now = tick()
-    if now - RodFix.lastFixTime < 0.05 then return end -- Throttle fixes
-    RodFix.lastFixTime = now
-    
-    local character = LocalPlayer.Character
-    if not character then return end
-    
-    local equippedTool = character:FindFirstChildOfClass("Tool")
-    if not equippedTool then return end
-    
-    -- Pastikan ini fishing rod
-    local isRod = equippedTool.Name:lower():find("rod") or 
-                  equippedTool:FindFirstChild("Rod") or
-                  equippedTool:FindFirstChild("Handle")
-    if not isRod then return end
-    
-    -- Modern Method: Fix using Humanoid and Tool properties
-    local humanoid = character:FindFirstChild("Humanoid")
-    if humanoid then
-        -- Method 1: Reset tool grip via Humanoid
-        pcall(function()
-            humanoid:UnequipTools()
-            task.wait(0.05)
-            humanoid:EquipTool(equippedTool)
-        end)
-        
-        -- Method 2: Force proper tool grip
-        local handle = equippedTool:FindFirstChild("Handle")
-        if handle then
-            -- Set proper grip for fishing rod
-            equippedTool.Grip = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            
-            -- Alternative: Use AttachmentCFrame if available
-            local attachment = handle:FindFirstChild("RightGripAttachment")
-            if attachment then
-                attachment.CFrame = CFrame.new(0, 0, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            end
-        end
-    end
-    
-    -- Fallback Method: Direct Motor6D manipulation (for older games)
-    local rightArm = character:FindFirstChild("Right Arm")
-    if rightArm then
-        local rightGrip = rightArm:FindFirstChild("RightGrip")
-        if rightGrip and rightGrip:IsA("Motor6D") then
-            rightGrip.C0 = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            rightGrip.C1 = CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, 0)
-        end
-    end
-    
-    print("[FixRodOrientation] Rod orientation fixed for:", equippedTool.Name)
 end
 
 -- Monitor when player equips/unequips tools
