@@ -210,35 +210,87 @@ if newFishNotificationRemote then
 end
 
 if baitSpawnedRemote then
-    baitSpawnedRemote.OnClientEvent:Connect(function()
-        -- Bait spawned - good time for rod orientation fix
+    baitSpawnedRemote.OnClientEvent:Connect(function(baitData)
+        -- Enhanced bait detection and rod orientation fix
+        FishDetection.lastCatchTime = tick()
+        AnimationMonitor.currentState = "baited"
+        
+        -- Update dashboard stats
+        if Dashboard and Dashboard.sessionStats then
+            Dashboard.sessionStats.baitsUsed = Dashboard.sessionStats.baitsUsed + 1
+        end
+        
+        local baitName = baitData and baitData.name or "Unknown Bait"
+        Notify("Bait", "🪱 " .. baitName .. " spawned - fish incoming!")
+        
+        -- Fix rod orientation after bait spawn
         task.wait(0.1)
         FixRodOrientation()
     end)
 end
 
 if fishingStoppedRemote then
-    fishingStoppedRemote.OnClientEvent:Connect(function()
-        -- Fishing stopped - reset animation state
-        if AnimationMonitor then
-            AnimationMonitor.currentState = "idle"
-            AnimationMonitor.fishingSuccess = false
+    fishingStoppedRemote.OnClientEvent:Connect(function(stopReason)
+        -- Enhanced fishing stopped handler
+        AnimationMonitor.currentState = "idle"
+        AnimationMonitor.fishingSuccess = false
+        RodFix.isCharging = false
+        
+        -- Update dashboard stats
+        if Dashboard and Dashboard.sessionStats then
+            if stopReason == "timeout" then
+                Dashboard.sessionStats.timeouts = Dashboard.sessionStats.timeouts + 1
+            elseif stopReason == "cancelled" then
+                Dashboard.sessionStats.cancelled = Dashboard.sessionStats.cancelled + 1
+            end
+        end
+        
+        -- Notify user of stop reason
+        if stopReason then
+            Notify("Fishing", "🎣 Fishing stopped: " .. stopReason)
         end
     end)
 end
 
 if playFishingEffectRemote then
-    playFishingEffectRemote.OnClientEvent:Connect(function()
-        -- Visual effect played - likely successful action
-        if AnimationMonitor then
-            AnimationMonitor.fishingSuccess = true
+    playFishingEffectRemote.OnClientEvent:Connect(function(effectData)
+        -- Enhanced visual effect detection
+        AnimationMonitor.fishingSuccess = true
+        FishDetection.lastCatchTime = tick()
+        AnimationMonitor.currentState = "success_effect"
+        
+        -- Log effect for debugging if enabled
+        if effectData and effectData.type then
+            print("[FishingEffect]", effectData.type, "at", tick())
         end
     end)
 end
 
 if fishingMinigameChangedRemote then
-    fishingMinigameChangedRemote.OnClientEvent:Connect(function()
-        -- Mini-game state changed - fix rod orientation
+    fishingMinigameChangedRemote.OnClientEvent:Connect(function(minigameData)
+        -- Enhanced minigame change handler
+        AnimationMonitor.currentState = "minigame"
+        
+        if minigameData then
+            -- Handle different minigame types
+            if minigameData.type == "timing" then
+                AnimationMonitor.currentState = "timing_minigame"
+            elseif minigameData.type == "bar" then
+                AnimationMonitor.currentState = "bar_minigame"
+            end
+            
+            -- Auto-handle minigame if enabled
+            if Config.autoMinigame and minigameData.autoComplete then
+                task.wait(0.1) -- Small delay to avoid detection
+                pcall(function()
+                    if finishRemote then
+                        finishRemote:FireServer()
+                    end
+                end)
+            end
+        end
+        
+        -- Fix rod orientation during minigame
         FixRodOrientation()
     end)
 end
@@ -412,8 +464,64 @@ local Config = {
     antiAfkEnabled = false,
     enhancementEnabled = false,
     autoReconnectEnabled = false,
-    autoModeEnabled = false -- New state for Auto Mode
+    autoModeEnabled = false, -- New state for Auto Mode
+    autoMinigame = true, -- Auto handle minigames
+    debugMode = false, -- Enable debug logging
+    autoSell = false,
+    autoSellThreshold = 50
 }
+
+-- ====================================================================
+-- CONNECTION MANAGEMENT SYSTEM
+-- ====================================================================
+local Connections = {}
+
+local function AddConnection(name, connection)
+    -- Disconnect existing connection if it exists
+    if Connections[name] then
+        pcall(function() Connections[name]:Disconnect() end)
+    end
+    Connections[name] = connection
+end
+
+local function RemoveConnection(name)
+    if Connections[name] then
+        pcall(function() Connections[name]:Disconnect() end)
+        Connections[name] = nil
+    end
+end
+
+local function CleanupAllConnections()
+    for name, connection in pairs(Connections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    Connections = {}
+    print("[Cleanup] All connections cleaned up")
+end
+
+-- Enhanced safe remote call with fallback
+local function SafeRemoteCall(remote, method, ...)
+    if not remote then 
+        if Config.debugMode then warn("[Remote] Remote not found") end
+        return false, "Remote not found" 
+    end
+    
+    local success, result = pcall(function(...)
+        if method == "Invoke" or remote:IsA("RemoteFunction") then
+            return remote:InvokeServer(...)
+        else
+            remote:FireServer(...)
+            return true
+        end
+    end, ...)
+    
+    if not success then
+        if Config.debugMode then warn("[Remote] Call failed:", result) end
+        return false, result
+    end
+    
+    return true, result
+end
 
 -- ====================================================================
 -- MOVEMENT ENHANCEMENT SYSTEM
@@ -749,7 +857,7 @@ local Weather = {
     enabled = false,
     autoPurchase = false,
     weatherTypes = {
-        "All", "Rain", "Storm", "Sunny", "Cloudy", "Fog", "Wind"
+        "All", "Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"
     },
     selectedWeather = "All",
     lastPurchaseTime = 0,
@@ -766,43 +874,94 @@ local Dashboard = {
         fishCount = 0,
         rareCount = 0,
         totalValue = 0,
-        currentLocation = "Unknown"
+        currentLocation = "Unknown",
+        baitsUsed = 0, -- New: track bait usage
+        timeouts = 0, -- New: track fishing timeouts
+        cancelled = 0, -- New: track cancelled attempts
+        successRate = 0 -- New: calculated success rate
     },
     heatmap = {},
-    optimalTimes = {}
+    optimalTimes = {},
+    
+    -- Enhanced logging function
+    LogFishCatch = function(fishName, location)
+        if not fishName then return end
+        
+        Dashboard.sessionStats.fishCount = Dashboard.sessionStats.fishCount + 1
+        Dashboard.sessionStats.currentLocation = location or "Unknown"
+        
+        -- Determine rarity
+        local rarity = "COMMON"
+        for rarityLevel, fishList in pairs(FishRarity) do
+            if table.find(fishList, fishName) then
+                rarity = rarityLevel
+                break
+            end
+        end
+        
+        -- Log rare fish
+        if rarity ~= "COMMON" then
+            Dashboard.sessionStats.rareCount = Dashboard.sessionStats.rareCount + 1
+            table.insert(Dashboard.rareFishCaught, {
+                name = fishName,
+                rarity = rarity,
+                location = location,
+                time = tick()
+            })
+        end
+        
+        -- Update location stats
+        if not Dashboard.locationStats[location] then
+            Dashboard.locationStats[location] = {fishCount = 0, rareCount = 0}
+        end
+        Dashboard.locationStats[location].fishCount = Dashboard.locationStats[location].fishCount + 1
+        if rarity ~= "COMMON" then
+            Dashboard.locationStats[location].rareCount = Dashboard.locationStats[location].rareCount + 1
+        end
+        
+        -- Calculate success rate
+        local totalAttempts = Dashboard.sessionStats.fishCount + Dashboard.sessionStats.timeouts + Dashboard.sessionStats.cancelled
+        if totalAttempts > 0 then
+            Dashboard.sessionStats.successRate = math.floor((Dashboard.sessionStats.fishCount / totalAttempts) * 100)
+        end
+        
+        if Config.debugMode then
+            print("[Dashboard] Fish logged:", fishName, "(" .. rarity .. ")", "at", location)
+        end
+    end
 }
 
--- Fish Rarity Categories (Updated from fishname.txt)
+-- Fish Rarity Categories (Cleaned and organized from debug data)
 local FishRarity = {
     MYTHIC = {
-        "Hawks Turtle", "Dotted Stingray", "Hammerhead Shark", "Manta Ray", 
-        "Abyss Seahorse", "Blueflame Ray", "Prismy Seahorse", "Loggerhead Turtle"
+        "Abyss Seahorse", "Blueflame Ray", "Prismy Seahorse", "Great Christmas Whale", 
+        "Robot Kraken", "Frostborn Shark", "Plasma Shark", "Giant Squid", "Vampire Squid", "Neptune's Trident"
     },
     LEGENDARY = {
-        "Blue Lobster", "Greenbee Grouper", "Starjam Tang", "Yellowfin Tuna",
-        "Chrome Tuna", "Magic Tang", "Enchanted Angelfish", "Lavafin Tuna", 
-        "Lobster", "Bumblebee Grouper"
+        "Lobster", "Bumblebee Grouper", "Great Whale", "Hammerhead Shark", "Manta Ray", 
+        "Blob Shark", "King Crab", "Ghost Shark", "Ghost Worm Fish", "Loggerhead Turtle"
     },
     EPIC = {
-        "Domino Damsel", "Panther Grouper", "Unicorn Tang", "Dorhey Tang",
-        "Moorish Idol", "Cow Clownfish", "Astra Damsel", "Firecoal Damsel",
-        "Longnose Butterfly", "Sushi Cardinal"
+        "Longnose Butterfly", "Sushi Cardinal", "Flame Angelfish", "Magic Tang", "Magma Goby", 
+        "Moorish Idol", "Unicorn Tang", "Vintage Blue Tang", "Yellowfin Tuna", "Salmon",
+        "Viperfish", "Deep Sea Crab", "Spotted Lantern Fish", "Rockfish", "Thresher Shark"
     },
     RARE = {
-        "Scissortail Dartfish", "White Clownfish", "Darwin Clownfish", 
-        "Korean Angelfish", "Candy Butterfly", "Jewel Tang", "Charmed Tang",
-        "Kau Cardinal", "Fire Goby"
+        "Kau Cardinal", "Fire Goby", "Jewel Tang", "Korean Angelfish", "Lavafin Tuna", 
+        "Maze Angelfish", "Maroon Butterfly", "Panther Grouper", "Scissortail Dartfish", 
+        "Shrimp Goby", "Skunk Tilefish", "Tricolore Butterfly", "White Tang", "Watanabei Angelfish"
     },
     UNCOMMON = {
-        "Maze Angelfish", "Tricolore Butterfly", "Flame Angelfish", 
-        "Yello Damselfish", "Vintage Damsel", "Coal Tang", "Magma Goby",
-        "Banded Butterfly", "Shrimp Goby"
+        "Banded Butterfly", "Domino Damsel", "Dorhey Tang", "Dotted Stingray", "Enchanted Angelfish", 
+        "Firecoal Damsel", "Greenbee Grouper", "Hawks Turtle", "Starjam Tang", "Jennifer Dottyback",
+        "Jellyfish", "Amber", "Blackcap Basslet", "Catfish", "Coney Fish", "Hermit Crab", "Queen Crab"
     },
     COMMON = {
-        "Orangy Goby", "Specked Butterfly", "Corazon Damse", "Copperband Butterfly",
-        "Strawberry Dotty", "Azure Damsel", "Clownfish", "Skunk Tilefish",
-        "Yellowstate Angelfish", "Vintage Blue Tang", "Ash Basslet", 
-        "Volcanic Basslet", "Boa Angelfish", "Jennifer Dottyback", "Reef Chromis"
+        "Reef Chromis", "Azure Damsel", "Coal Tang", "Copperband Butterfly", "Corazon Damsel", 
+        "Cow Clownfish", "Darwin Clownfish", "Ash Basslet", "Astra Damsel", "Blue Lobster",
+        "Boa Angelfish", "Candy Butterfly", "Charmed Tang", "Chrome Tuna", "Clownfish",
+        "Volcanic Basslet", "White Clownfish", "Yello Damselfish", "Yellowstate Angelfish",
+        "Bandit Angelfish", "Zoster Butterfly", "Orangy Goby", "Specked Butterfly", "Strawberry Dotty"
     }
 }
 
@@ -1241,7 +1400,7 @@ end
 local function PurchaseAllWeatherEvents()
     if not Weather.enabled or not purchaseWeatherEventRemote then return false end
     
-    local allWeatherTypes = {"Rain", "Storm", "Sunny", "Cloudy", "Fog", "Wind"}
+    local allWeatherTypes = {"Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"}
     local successCount = 0
     local totalCount = #allWeatherTypes
     
