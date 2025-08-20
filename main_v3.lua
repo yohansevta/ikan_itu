@@ -302,6 +302,21 @@ local GameAutoMimicNote = FishingTab:CreateLabel("✅ RequestChargeFishingRod �
 
 local GameAutoMimicSafety = FishingTab:CreateLabel("🛡️ Built-in: OnCooldown() • NoInventorySpace() • GUID tracking")
 
+-- Rod Orientation Fix Toggle
+local RodFixToggle = FishingTab:CreateToggle({
+    Name = "🔧 Rod Orientation Fix",
+    CurrentValue = true,
+    Flag = "RodOrientationFix",
+    Callback = function(value)
+        RodFix.enabled = value
+        if value then
+            Notify("Rod Fix", "🟢 Rod orientation fix enabled")
+        else
+            Notify("Rod Fix", "🔴 Rod orientation fix disabled")
+        end
+    end
+})
+
 -- ===================================================================
 -- ROD ORIENTATION FIX SYSTEM
 -- ===================================================================
@@ -313,6 +328,117 @@ local RodFix = {
     isCharging = false,
     chargingConnection = nil
 }
+
+-- Enhanced Rod Orientation Fix with multiple methods
+local function FixRodOrientation()
+    if not RodFix.enabled then return end
+    
+    local now = tick()
+    if now - RodFix.lastFixTime < 0.05 then return end -- Throttle fixes
+    RodFix.lastFixTime = now
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local equippedTool = character:FindFirstChildOfClass("Tool")
+    if not equippedTool then return end
+    
+    -- Pastikan ini fishing rod
+    local isRod = equippedTool.Name:lower():find("rod") or 
+                  equippedTool:FindFirstChild("Rod") or
+                  equippedTool:FindFirstChild("Handle")
+    if not isRod then return end
+    
+    -- Modern Method: Fix using Humanoid and Tool properties
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        -- Method 1: Reset tool grip via Humanoid
+        pcall(function()
+            humanoid:UnequipTools()
+            task.wait(0.05)
+            humanoid:EquipTool(equippedTool)
+        end)
+        
+        -- Method 2: Force proper tool grip
+        local handle = equippedTool:FindFirstChild("Handle")
+        if handle then
+            -- Set proper grip for fishing rod
+            equippedTool.Grip = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            
+            -- Alternative: Use AttachmentCFrame if available
+            local attachment = handle:FindFirstChild("RightGripAttachment")
+            if attachment then
+                attachment.CFrame = CFrame.new(0, 0, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            end
+        end
+    end
+    
+    -- Fallback Method: Direct Motor6D manipulation (for older games)
+    local rightArm = character:FindFirstChild("Right Arm")
+    if rightArm then
+        local rightGrip = rightArm:FindFirstChild("RightGrip")
+        if rightGrip and rightGrip:IsA("Motor6D") then
+            rightGrip.C0 = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            rightGrip.C1 = CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, 0)
+        end
+    end
+    
+    print("[FixRodOrientation] Rod orientation fixed for:", equippedTool.Name)
+end
+
+-- Alternative: Force rod to face forward using CFrame manipulation
+local function ForceRodDirection()
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local equippedTool = character:FindFirstChildOfClass("Tool")
+    if not equippedTool then return end
+    
+    local handle = equippedTool:FindFirstChild("Handle")
+    if not handle then return end
+    
+    -- Force handle to face forward
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        local forwardDirection = rootPart.CFrame.LookVector
+        handle.CFrame = CFrame.lookAt(handle.Position, handle.Position + forwardDirection)
+        print("[ForceRodDirection] Rod forced to face forward")
+    end
+end
+
+-- Simple rod equip function with orientation fix
+local function ForceEquipRod()
+    if not equipRemote then return false end
+    
+    local character = LocalPlayer.Character
+    if not character then return false end
+    
+    -- Unequip current tool first
+    local currentTool = character:FindFirstChildOfClass("Tool")
+    if currentTool then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid:UnequipTools()
+            task.wait(0.1)
+        end
+    end
+    
+    -- Equip fishing rod
+    local success = pcall(function()
+        equipRemote:FireServer(1)
+    end)
+    
+    if success then
+        task.wait(0.2) -- Wait for equip
+        FixRodOrientation() -- Fix orientation after equip
+        task.wait(0.1)
+        ForceRodDirection() -- Force direction as backup
+        print("[ForceEquipRod] Rod equipped with orientation fix")
+        return true
+    end
+    
+    return false
+end
 
 local function FixRodOrientation()
     if not RodFix.enabled then return end
@@ -333,35 +459,41 @@ local function FixRodOrientation()
                   equippedTool:FindFirstChild("Handle")
     if not isRod then return end
     
-    -- Method 1: Fix Motor6D during charging phase (paling efektif)
+    -- Modern Method: Fix using Humanoid and Tool properties
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        -- Method 1: Reset tool grip via Humanoid
+        pcall(function()
+            humanoid:UnequipTools()
+            task.wait(0.05)
+            humanoid:EquipTool(equippedTool)
+        end)
+        
+        -- Method 2: Force proper tool grip
+        local handle = equippedTool:FindFirstChild("Handle")
+        if handle then
+            -- Set proper grip for fishing rod
+            equippedTool.Grip = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            
+            -- Alternative: Use AttachmentCFrame if available
+            local attachment = handle:FindFirstChild("RightGripAttachment")
+            if attachment then
+                attachment.CFrame = CFrame.new(0, 0, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            end
+        end
+    end
+    
+    -- Fallback Method: Direct Motor6D manipulation (for older games)
     local rightArm = character:FindFirstChild("Right Arm")
     if rightArm then
         local rightGrip = rightArm:FindFirstChild("RightGrip")
         if rightGrip and rightGrip:IsA("Motor6D") then
-            -- Orientasi normal untuk rod menghadap depan SELAMA charging
             rightGrip.C0 = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(-90), 0, 0)
             rightGrip.C1 = CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, 0)
-            return
         end
     end
     
-    -- Method 2: Fix Tool Grip Value (untuk tools dengan custom grip)
-    local handle = equippedTool:FindFirstChild("Handle")
-    if handle then
-        local toolGrip = equippedTool:FindFirstChild("Grip")
-        if toolGrip and toolGrip:IsA("CFrameValue") then
-            toolGrip.Value = CFrame.new(0, -1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            return
-        end
-        
-        -- Jika tidak ada grip value, buat yang baru
-        if not toolGrip then
-            toolGrip = Instance.new("CFrameValue")
-            toolGrip.Name = "Grip"
-            toolGrip.Value = CFrame.new(0, -1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            toolGrip.Parent = equippedTool
-        end
-    end
+    print("[FixRodOrientation] Rod orientation fixed for:", equippedTool.Name)
 end
 
 -- Monitor when player equips/unequips tools
@@ -659,23 +791,28 @@ local function DoGameAutoMimicCycle()
         return
     end
     
-    -- Step 1: Equip rod if needed (with proper timing for animation)
+    -- Step 1: Force equip rod with proper orientation
     local character = LocalPlayer.Character
     if character and not character:FindFirstChildOfClass("Tool") then
-        if equipRemote then
-            print("[GameAutoMimic] Equipping fishing rod...")
-            pcall(function() equipRemote:FireServer(1) end)
-            task.wait(1.0) -- Give time for equip animation
+        print("[GameAutoMimic] Force equipping fishing rod...")
+        if not ForceEquipRod() then
+            print("[GameAutoMimic] Failed to equip rod")
+            return
         end
+    else
+        -- Rod already equipped, just fix orientation
+        FixRodOrientation()
+        ForceRodDirection()
     end
     
-    -- Step 2: RequestChargeFishingRod (with visible charging animation)
+    -- Step 2: RequestChargeFishingRod (with enhanced visual)
     print("[GameAutoMimic] Starting rod charge... (you should see charging animation)")
     local usePerfect = math.random(1, 100) <= 85 -- 85% perfect chance
     local timestamp = usePerfect and GetServerTime() or (GetServerTime() + math.random() * 0.5)
     
-    -- Fix rod orientation for better visual
+    -- Multiple orientation fixes for better visual
     FixRodOrientation()
+    ForceRodDirection()
     
     if rodRemote then
         local ok = pcall(function() rodRemote:InvokeServer(timestamp) end)
@@ -686,11 +823,14 @@ local function DoGameAutoMimicCycle()
         print("[GameAutoMimic] Rod charging... (watch the charging bar!)")
     end
     
-    -- Extended charge time to see animation clearly
+    -- Extended charge time with continuous orientation fixing
     local chargeTime = 2.0 + math.random() * 1.0 -- 2-3 seconds for visible charging
     local chargeStart = tick()
     while tick() - chargeStart < chargeTime do
         FixRodOrientation() -- Keep fixing during charge
+        if (tick() - chargeStart) % 0.5 < 0.1 then -- Every 0.5 seconds
+            ForceRodDirection() -- Force direction periodically
+        end
         task.wait(0.1)
     end
     print("[GameAutoMimic] Charge complete!")
