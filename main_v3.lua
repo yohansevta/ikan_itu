@@ -401,45 +401,102 @@ local function FixRodOrientation()
     print("[FixRodOrientation] Rod orientation fixed for:", equippedTool.Name)
 end
 
--- Simple Smart Fishing Cycle
-local function DoSmartCycle()
-    -- Equip rod
+-- Enhanced Smart Fishing Cycle (Based on working scriptcontoh.lua)
+-- Enhanced Fast Mode (Based on working scriptcontoh.lua)
+local function DoFastCycle()
+    -- Phase 1: Equip rod with fast timing
+    local character = LocalPlayer.Character
+    if character then
+        local equippedTool = character:FindFirstChildOfClass("Tool")
+        if not equippedTool and equipRemote then
+            local ok = pcall(function() equipRemote:FireServer(1) end)
+            if not ok then print("[Fast Mode] Failed to equip rod") end
+            task.wait(0.15) -- Fast equip wait
+        end
+    end
+    
+    -- Phase 2: Quick rod fix
+    FixRodOrientation()
+    
+    -- Phase 3: Fast charge with perfect timing
+    if rodRemote then
+        local ok = pcall(function() rodRemote:InvokeServer(GetServerTime()) end)
+        if not ok then print("[Fast Mode] Failed to charge rod") end
+    end
+    
+    task.wait(0.05 + math.random()*0.05) -- Very fast charge wait with variation
+    
+    -- Phase 4: Perfect minigame values
+    local baseX = -1.2379989624023438
+    local baseY = 0.9800224985802423
+    
+    -- Add tiny variations for natural behavior
+    local varX = baseX + (math.random(-5, 5) / 10000)
+    local varY = baseY + (math.random(-5, 5) / 10000)
+    
+    if miniGameRemote then
+        local ok = pcall(function() miniGameRemote:InvokeServer(varX, varY) end)
+        if not ok then print("[Fast Mode] Failed minigame") end
+    end
+    
+    task.wait(0.3 + math.random()*0.1) -- Fast minigame wait
+    
+    -- Phase 5: Complete fishing
+    if finishRemote then
+        local ok = pcall(function() finishRemote:FireServer() end)
+        if not ok then print("[Fast Mode] Failed to finish") end
+    end
+    
+    task.wait(0.2 + math.random()*0.1) -- Fast final wait
+    
+    Status.fishCaught = Status.fishCaught + 1
+    print("[Fast Mode] Completed! Total fish:", Status.fishCaught)
+end
+
+-- Enhanced Secure Mode (Based on working scriptcontoh.lua)
+local function DoSecureCycle()
+    -- Phase 1: Equip rod first
     if equipRemote then 
-        pcall(function() equipRemote:FireServer(1) end)
+        local ok = pcall(function() equipRemote:FireServer(1) end)
+        if not ok then print("[Secure Mode] Failed to equip") end
         task.wait(0.2)
     end
     
+    -- Phase 2: Fix rod orientation
     FixRodOrientation()
     
-    -- Charge rod
+    -- Phase 3: Charge rod with secure timing
     local usePerfect = math.random(1,100) <= Config.safeModeChance
-    local timestamp = usePerfect and GetServerTime() or GetServerTime() + math.random()*0.5
+    local timestamp = usePerfect and 9999999999 or (GetServerTime() + math.random())
     
-    if rodRemote then 
-        pcall(function() rodRemote:InvokeServer(timestamp) end)
+    if rodRemote then
+        local ok = pcall(function() rodRemote:InvokeServer(timestamp) end)
+        if not ok then print("[Secure Mode] Failed to charge") end
     end
     
-    task.wait(1.0) -- Charge wait
+    task.wait(0.8 + math.random()*0.4) -- Variable charge wait
     
-    -- Minigame
-    local x = usePerfect and -1.238 or (math.random(-1000,1000)/1000)
-    local y = usePerfect and 0.969 or (math.random(0,1000)/1000)
+    -- Phase 4: Minigame with secure values
+    local x = usePerfect and -1.2379989624023438 or (math.random(-1000,1000)/1000)
+    local y = usePerfect and 0.9800224985802423 or (math.random(0,1000)/1000)
     
-    if miniGameRemote then 
-        pcall(function() miniGameRemote:InvokeServer(x,y) end)
+    if miniGameRemote then
+        local ok = pcall(function() miniGameRemote:InvokeServer(x, y) end)
+        if not ok then print("[Secure Mode] Failed minigame") end
     end
     
-    task.wait(0.5) -- Minigame wait
+    task.wait(1.3 + math.random()*0.5) -- Variable minigame wait
     
-    -- Complete fishing
+    -- Phase 5: Complete fishing
     if finishRemote then 
-        pcall(function() finishRemote:FireServer() end)
+        local ok = pcall(function() finishRemote:FireServer() end)
+        if not ok then print("[Secure Mode] Failed to finish") end
     end
     
-    task.wait(1.5) -- Completion wait
+    task.wait(0.5 + math.random()*0.3) -- Variable final wait
     
     Status.fishCaught = Status.fishCaught + 1
-    print("[Smart Cycle] Completed! Total fish:", Status.fishCaught)
+    print("[Secure Mode] Completed! Total fish:", Status.fishCaught)
 end
 
 -- Game Auto Mimic State
@@ -577,21 +634,29 @@ function AutoModeRunner(mySessionId)
     end
 end
 
--- Main Autofish Runner
+-- Main Autofish Runner with proper mode handling
 function AutofishRunner(mySessionId)
     -- Initialize session stats
     Status.sessionTime = tick()
     Status.fishCaught = 0
     
-    Notify("Fishing AI", "🤖 Smart AutoFishing started (mode: " .. Config.mode .. ")")
+    Notify("Fishing AI", "🤖 Fishing started (mode: " .. Config.mode .. ")")
     while Config.enabled and sessionId == mySessionId do
         local ok, err = pcall(function()
-            if Config.mode == "gameautomimic" then
+            -- Execute based on mode
+            if Config.mode == "smart" then
+                DoSmartCycle()
+            elseif Config.mode == "secure" then
+                DoSecureCycle()
+            elseif Config.mode == "fast" then
+                DoFastCycle()
+            elseif Config.mode == "gameautomimic" then
                 DoGameAutoMimicCycle()
-            else 
-                DoSmartCycle() -- Default to smart mode for all others
+            else
+                DoSmartCycle() -- Default fallback
             end
         end)
+        
         if not ok then
             warn("modern_autofish: cycle error:", err)
             Notify("Fishing AI", "Cycle error: " .. tostring(err))
@@ -603,9 +668,13 @@ function AutofishRunner(mySessionId)
         local delay = baseDelay
         
         if Config.mode == "gameautomimic" then
-            delay = 8.0 + math.random()*3.0 -- Longer delay for visual experience (8-11s)
+            delay = 8.0 + math.random()*3.0 -- Longer delay for visual experience
+        elseif Config.mode == "fast" then
+            delay = 1.0 + math.random()*0.5 -- Faster for fast mode
+        elseif Config.mode == "secure" then
+            delay = 3.0 + math.random()*2.0 -- Variable for secure mode
         else
-            delay = 2.0 + math.random()*1.0 -- Standard delay for other modes
+            delay = 2.0 + math.random()*1.0 -- Standard for smart mode
         end
         
         if delay < 0.15 then delay = 0.15 end -- Minimum delay
@@ -620,7 +689,7 @@ function AutofishRunner(mySessionId)
         UpdateStatusDisplay()
     end
     
-    Notify("Fishing AI", "🤖 Smart AutoFishing stopped")
+    Notify("Fishing AI", "🤖 Fishing stopped")
 end
 
 -- Anti-AFK Functions
