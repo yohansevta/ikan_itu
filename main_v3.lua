@@ -69,7 +69,7 @@ local Config = {
     mode = "smart",
     enabled = false,
     autoRecastDelay = 0.4,
-    safeModeChance = 70,
+    safeModeChance = 80,
     
     -- System States  
     antiAfkEnabled = false,
@@ -124,7 +124,7 @@ local FishingSection = FishingTab:CreateSection("🎣 AI Fishing Control")
 -- Mode Selection
 local ModeDropdown = FishingTab:CreateDropdown({
     Name = "🧠 Fishing Mode",
-    Options = {"Smart AI", "Secure Mode", "Fast Mode", "Auto Loop"},
+    Options = {"Smart AI", "Secure Mode", "Fast Mode", "Game Auto", "Auto Loop"},
     CurrentOption = "Smart AI",
     Flag = "FishingMode",
     Callback = function(option)
@@ -132,6 +132,7 @@ local ModeDropdown = FishingTab:CreateDropdown({
             ["Smart AI"] = "smart",
             ["Secure Mode"] = "secure",
             ["Fast Mode"] = "fast",
+            ["Game Auto"] = "gameauto",
             ["Auto Loop"] = "auto"
         }
         Config.mode = modes[option] or "smart"
@@ -172,6 +173,15 @@ local StopButton = FishingTab:CreateButton({
             return
         end
         
+        -- Disable game auto fishing if it was enabled
+        if Config.mode == "gameauto" and gameAutoEnabled and gameAutoRemote then
+            pcall(function()
+                gameAutoRemote:InvokeServer(false) -- Disable game's auto fishing
+            end)
+            gameAutoEnabled = false
+            print("[Game Auto] Built-in auto fishing disabled")
+        end
+        
         Config.enabled = false
         sessionId = sessionId + 1
         Status.isRunning = false
@@ -192,8 +202,8 @@ local AdvancedSection = FishingTab:CreateSection("⚙️ Advanced Settings")
 -- Recast Delay Slider
 local RecastSlider = FishingTab:CreateSlider({
     Name = "⏱️ Recast Delay",
-    Range = {0.1, 2.0},
-    Increment = 0.1,
+    Range = {0.01, 1.0},
+    Increment = 0.01,
     Suffix = "s",
     CurrentValue = Config.autoRecastDelay,
     Flag = "RecastDelay",
@@ -237,13 +247,13 @@ local AntiAfkToggle = FishingTab:CreateToggle({
 -- Auto Mode Section
 local AutoModeSection = FishingTab:CreateSection("🔥 Auto Mode (Advanced)")
 
-local AutoModeInfo = FishingTab:CreateLabel("⚠️ Auto Mode: Continuous FishingCompleted loop")
+local AutoModeInfo = FishingTab:CreateLabel("⚠️ Auto Loop: Direct FishingCompleted spam (skips minigame)")
 
 local AutoModeStart = FishingTab:CreateButton({
-    Name = "🔥 Start Auto Mode",
+    Name = "🔥 Start Auto Loop",
     Callback = function()
         if Config.autoModeEnabled then
-            Notify("Auto Mode", "Already running!")
+            Notify("Auto Loop", "Already running!")
             return
         end
         
@@ -254,18 +264,25 @@ local AutoModeStart = FishingTab:CreateButton({
             AutoModeRunner(autoModeSessionId)
         end)
         
-        Notify("Auto Mode", "🔥 Auto Mode started!")
+        Notify("Auto Loop", "🔥 Auto Loop started!")
     end
 })
 
 local AutoModeStop = FishingTab:CreateButton({
-    Name = "🛑 Stop Auto Mode",
+    Name = "🛑 Stop Auto Loop",
     Callback = function()
         Config.autoModeEnabled = false
         autoModeSessionId = autoModeSessionId + 1
-        Notify("Auto Mode", "🛑 Auto Mode stopped!")
+        Notify("Auto Loop", "🛑 Auto Loop stopped!")
     end
 })
+
+-- Game Auto Section
+local GameAutoSection = FishingTab:CreateSection("🎮 Game Auto Mode")
+
+local GameAutoInfo = FishingTab:CreateLabel("🎮 Game Auto: Uses built-in game auto fishing (includes minigame)")
+
+local GameAutoNote = FishingTab:CreateLabel("✅ Complete fishing cycle with animations and minigame timing")
 
 -- ===================================================================
 -- ROD ORIENTATION FIX SYSTEM
@@ -396,6 +413,7 @@ local rodRemote = ResolveRemote("RF/ChargeFishingRod")
 local miniGameRemote = ResolveRemote("RF/RequestFishingMinigameStarted")
 local finishRemote = ResolveRemote("RE/FishingCompleted")
 local equipRemote = ResolveRemote("RE/EquipToolFromHotbar")
+local gameAutoRemote = ResolveRemote("RF/UpdateAutoFishingState") -- Game's built-in auto fishing
 
 local function safeInvoke(remote, ...)
     if not remote then return false, "nil_remote" end
@@ -586,6 +604,36 @@ local function DoFastCycle()
     print("[Fast Mode] Completed! Total fish:", Status.fishCaught)
 end
 
+-- Game Auto Fishing Cycle (Uses built-in game auto fishing)
+local gameAutoEnabled = false
+
+local function DoGameAutoCycle()
+    -- Use game's built-in auto fishing system
+    if not gameAutoEnabled then
+        if gameAutoRemote then
+            local success = pcall(function()
+                gameAutoRemote:InvokeServer(true) -- Enable game's auto fishing
+            end)
+            if success then
+                gameAutoEnabled = true
+                print("[Game Auto] Built-in auto fishing enabled")
+                Notify("Game Auto", "🎮 Built-in auto fishing activated!")
+            else
+                print("[Game Auto] Failed to enable built-in auto fishing")
+                return false
+            end
+        else
+            print("[Game Auto] UpdateAutoFishingState remote not found")
+            return false
+        end
+    end
+    
+    -- Let the game handle auto fishing, we just monitor
+    Status.fishCaught = Status.fishCaught + 1
+    print("[Game Auto] Game is handling auto fishing...")
+    return true
+end
+
 -- Auto Mode Runner (Direct FishingCompleted spam)
 function AutoModeRunner(mySessionId)
     Notify("Auto Mode", "🔥 Auto Mode started! Spamming FishingCompleted...")
@@ -626,6 +674,15 @@ function AutofishRunner(mySessionId)
                 DoSecureCycle()
             elseif Config.mode == "fast" then
                 DoFastCycle()
+            elseif Config.mode == "gameauto" then
+                local success = DoGameAutoCycle()
+                if not success then
+                    -- Fallback to smart mode if game auto fails
+                    Config.mode = "smart"
+                    Status.fishingMode = "Smart AI"
+                    Notify("Game Auto", "⚠️ Fallback to Smart AI mode")
+                    DoSmartCycle()
+                end
             else 
                 DoSmartCycle() -- Default to smart mode
             end
@@ -645,6 +702,8 @@ function AutofishRunner(mySessionId)
             delay = 0.6 + math.random()*0.4 -- Variable delay for secure mode
         elseif Config.mode == "fast" then
             delay = 0.05 + math.random()*0.02 -- Ultra fast delay (50-70ms)
+        elseif Config.mode == "gameauto" then
+            delay = 3.0 + math.random()*2.0 -- Longer delay, let game handle timing (3-5s)
         else
             -- Smart mode with animation-based timing
             local smartDelay = baseDelay + GetRealisticTiming("waiting") * 0.3
