@@ -174,9 +174,10 @@ local StopButton = FishingTab:CreateButton({
         end
         
         -- Stop GameAutoMimic if it was running
-        if Config.mode == "gameautomimic" and GameAutoMimicModule then
-            GameAutoMimicModule.Stop()
-            print("[GameAutoMimic] Stopped via main stop button")
+        if Config.mode == "gameautomimic" then
+            GameAutoMimicState.sessionActive = false
+            GameAutoMimicState.enabled = false
+            print("[GameAutoMimic] Session stopped via main stop button")
         end
         
         Config.enabled = false
@@ -601,44 +602,107 @@ local function DoFastCycle()
     print("[Fast Mode] Completed! Total fish:", Status.fishCaught)
 end
 
--- Game Auto Mimic Cycle (Meniru FishingController steps)
-local GameAutoMimicModule = nil
+-- Game Auto Mimic Cycle (Meniru FishingController steps) - Integrated Version
+local GameAutoMimicState = {
+    enabled = false,
+    currentGUID = nil,
+    sessionActive = false,
+    lastAction = 0,
+    fishCaught = 0
+}
 
-local function LoadGameAutoMimic()
-    if GameAutoMimicModule then return GameAutoMimicModule end
-    
-    -- Try to load GameAutoMimic module
-    local success, module = pcall(function()
-        return loadstring(game:HttpGet('https://raw.githubusercontent.com/yohansevta/ikan_itu/refs/heads/main/modules/core/game_auto_mimic.lua'))()
-    end)
-    
-    if success and module then
-        GameAutoMimicModule = module
-        print("[GameAutoMimic] Module loaded successfully")
-        return GameAutoMimicModule
-    else
-        warn("[GameAutoMimic] Failed to load module:", module)
-        return nil
-    end
+local function GenerateSessionGUID()
+    return string.format("%08x-%04x-%04x", 
+                        math.random(0, 0xFFFFFFFF),
+                        math.random(0, 0xFFFF), 
+                        math.random(0, 0xFFFF))
+end
+
+local function GameAutoMimicOnCooldown()
+    local timeSinceLastAction = tick() - GameAutoMimicState.lastAction
+    return timeSinceLastAction < 2.0 -- Minimum 2 seconds between actions
 end
 
 local function DoGameAutoMimicCycle()
-    local mimic = LoadGameAutoMimic()
-    if not mimic then
-        print("[GameAutoMimic] Module not available, fallback to Smart mode")
-        DoSmartCycle()
+    print("[GameAutoMimic] Starting cycle...")
+    
+    -- Initialize session if needed
+    if not GameAutoMimicState.sessionActive then
+        GameAutoMimicState.currentGUID = GenerateSessionGUID()
+        GameAutoMimicState.sessionActive = true
+        GameAutoMimicState.fishCaught = 0
+        print(string.format("[GameAutoMimic] Session started (GUID: %s)", GameAutoMimicState.currentGUID))
+    end
+    
+    -- Safety: Check cooldown
+    if GameAutoMimicOnCooldown() then
+        print("[GameAutoMimic] On cooldown, waiting...")
+        task.wait(0.5)
         return
     end
     
-    -- Use GameAutoMimic's built-in cycle management
-    if not mimic.GetStatus().isRunning then
-        print("[GameAutoMimic] Starting mimic session...")
-        mimic.Start()
+    -- Step 1: Equip rod if needed
+    local character = LocalPlayer.Character
+    if character and not character:FindFirstChildOfClass("Tool") then
+        if equipRemote then
+            pcall(function() equipRemote:FireServer(1) end)
+            task.wait(0.2)
+        end
     end
     
-    -- GameAutoMimic handles its own loop, we just monitor
+    -- Step 2: RequestChargeFishingRod (mimicking FishingController)
+    local usePerfect = math.random(1, 100) <= 85 -- 85% perfect chance
+    local timestamp = usePerfect and GetServerTime() or (GetServerTime() + math.random() * 0.5)
+    
+    if rodRemote then
+        local ok = pcall(function() rodRemote:InvokeServer(timestamp) end)
+        if not ok then 
+            print("[GameAutoMimic] RequestChargeFishingRod failed")
+            return
+        end
+        print("[GameAutoMimic] RequestChargeFishingRod success")
+    end
+    
+    task.wait(0.8 + math.random() * 0.3) -- Humanized charge delay
+    
+    -- Step 3: RequestFishingMinigameClick (mimicking FishingController)
+    local x = usePerfect and -1.238 or (math.random(-1000, 1000) / 1000)
+    local y = usePerfect and 0.969 or (math.random(0, 1000) / 1000)
+    
+    if miniGameRemote then
+        local ok = pcall(function() miniGameRemote:InvokeServer(x, y) end)
+        if not ok then
+            print("[GameAutoMimic] RequestFishingMinigameClick failed")
+            return
+        end
+        print("[GameAutoMimic] RequestFishingMinigameClick success")
+    end
+    
+    task.wait(0.5 + math.random() * 0.2) -- Humanized minigame delay
+    
+    -- Step 4: SendFishingRequestToServer (optional validation)
+    -- This step might be used for server-side validation in real game auto
+    print("[GameAutoMimic] SendFishingRequestToServer (simulated)")
+    
+    task.wait(1.0 + math.random() * 0.5) -- Wait for fish
+    
+    -- Step 5: FishCaught (completion)
+    if finishRemote then
+        local ok = pcall(function() finishRemote:FireServer() end)
+        if not ok then
+            print("[GameAutoMimic] FishCaught failed")
+            return
+        end
+        print("[GameAutoMimic] FishCaught success")
+    end
+    
+    -- Update state
+    GameAutoMimicState.lastAction = tick()
+    GameAutoMimicState.fishCaught = GameAutoMimicState.fishCaught + 1
     Status.fishCaught = Status.fishCaught + 1
-    print("[GameAutoMimic] Cycle delegated to module")
+    
+    print(string.format("[GameAutoMimic] Cycle completed! Session fish: %d, Total: %d", 
+                       GameAutoMimicState.fishCaught, Status.fishCaught))
 end
 
 -- Auto Mode Runner (Direct FishingCompleted spam)

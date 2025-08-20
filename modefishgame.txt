@@ -1,0 +1,24 @@
+[07:22:08] [Module Analyzer] Success: ✅ AutoFishingController loaded!
+[07:22:08] 📋 Found: Start (function)
+[07:22:10] 📁 Loading module: ReplicatedStorage/Controllers/FishingController
+[07:22:10] ✅ Module loaded successfully!
+[07:22:10] [Module Analyzer] Success: ✅ FishingController loaded!
+[07:22:10] 📋 Found: RequestFishingMinigameClick (function)
+[07:22:10] 📋 Found: OnCooldown (function)
+[07:22:10] 📋 Found: NoInventorySpace (function)
+[07:22:10] 📋 Found: UpdateChargeState (function)
+[07:22:10] 📋 Found: BaitSpawned (function)
+[07:22:10] 📋 Found: FishingMinigameClick (function)
+[07:22:10] 📋 Found: GetCurrentGUID (function)
+[07:22:10] 📋 Found: FishingStopped (function)
+[07:22:10] 📋 Found: Init (function)
+[07:22:10] 📋 Found: _getPower (function)
+[07:22:10] 📋 Found: Run (function)
+[07:22:10] 📋 Found: FishingRodStarted (function)
+[07:22:10] 📋 Found: RequestClientStopFishing (function)
+[07:22:10] 📋 Found: _updateChargeFrame (function)
+[07:22:10] 📋 Found: FishingMinigameChanged (function)
+[07:22:10] 📋 Found: Start (function)
+[07:22:10] 📋 Found: RequestChargeFishingRod (function)
+[07:22:10] 📋 Found: SendFishingRequestToServer (function)
+[07:22:10] 📋 Found: FishCaught (function)
